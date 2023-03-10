@@ -136,16 +136,18 @@ def get_avg_signal(well, mask=None):
     return np.mean(well_masked, axis=(1,2))
 
 def max_center_signals(signals, window_size=100):
-    max_points = list(np.argmax(signals, axis=1))
-    max_points = np.array([ (idx, point) for idx, point in enumerate(max_points) if signals.shape[1] - point > window_size ])
+    tr_signals = signals.copy()
+    tr_signals = corr_data(tr_signals)
+    max_points = list(np.argmax(tr_signals, axis=1))
+    max_points = np.array([ (idx, point) for idx, point in enumerate(max_points) if tr_signals.shape[1] - point > window_size ])
     if max_points.shape[0] == 0:
         return None
-    mx = np.max(signals.shape[1] - max_points[:, 1])
+    mx = np.max(tr_signals.shape[1] - max_points[:, 1])
     max_mtx = np.zeros((max_points.shape[0], mx*2 + 1))
     for i, (idx, pt) in enumerate(max_points):
         start  = int(np.round(max_mtx.shape[1] / 2) - pt) if np.round(max_mtx.shape[1] / 2) - pt > 0 else 0
-        end = int(np.round(max_mtx.shape[1] / 2) - pt + signals.shape[1]) if np.round(max_mtx.shape[1] / 2) - pt + signals.shape[1] < max_mtx.shape[1] else max_mtx.shape[1]
-        max_mtx[i, start:end] = signals[idx, signals.shape[1] - (end - start):signals.shape[1]]
+        end = int(np.round(max_mtx.shape[1] / 2) - pt + tr_signals.shape[1]) if np.round(max_mtx.shape[1] / 2) - pt + tr_signals.shape[1] < max_mtx.shape[1] else max_mtx.shape[1]
+        max_mtx[i, start:end] = tr_signals[idx, tr_signals.shape[1] - (end - start):tr_signals.shape[1]]
     max_mtx = corr_data(max_mtx)
     if max_mtx.ndim == 1:
         max_mtx = np.expand_dims(max_mtx, axis=0)
