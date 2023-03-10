@@ -15,21 +15,33 @@ def load_measurement(dir_path):
         dir_path: the path to the folder
     '''
     S = 0.0002
-    filename = dir_path + '/240x320x4x3_test_WL_Power'
-
-    filename = filename if os.path.exists(filename) else dir_path + '/240x320x5x3_test_WL_Power'
-
-    fr = open( filename, "rb")
+    files = [ obj for obj in os.listdir(dir_path) if '_test_wl_power' in obj.lower()]
+    
+    if len(files) == 0:
+        print("Missing test wl power file!!!")
+        return None
+    
+    wl_power_path = os.path.join(dir_path, files[0])
+    
+    files = [ obj for obj in os.listdir(dir_path) if '_avg' in obj.lower()]
+    
+    if len(files) == 0:
+        print("Missing test avg!!!")
+        return None
+    
+    avg_path = os.path.join(dir_path, files[0])
+    
+    fr = open( wl_power_path, "rb")
     init_map = np.frombuffer(fr.read(614400), dtype='float32')
     init_wl_map = np.reshape(init_map[:76800], [240, 320])
     fr.close()
 
-    sorted_files = os.listdir(dir_path + '/DMR')
+    sorted_files = os.listdir(os.path.join(dir_path, 'DMR'))
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),240,320])
     for i in range(len(sorted_files)):
-        step = open(dir_path + f'/DMR/{i + 1}', 'rb')
+        step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
         A_int = np.frombuffer(step.read(153600), dtype='uint16')
         step.close()
         timestep_mats[i,:,:] = np.reshape(A_int,[240,320])
@@ -37,9 +49,8 @@ def load_measurement(dir_path):
     WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
 
     time = []
-    if os.path.exists(dir_path + '/test_avg'):
-        time = pd.read_table(dir_path + '/test_avg', skiprows=1, decimal=',')
-        time = np.asarray(time.iloc[:,0]) * 60
+    time = pd.read_table(avg_path, skiprows=1, decimal=',')
+    time = np.asarray(time.iloc[:,0]) * 60
     return WL_map, time
 
 def load_measurement_bt(dir_path):
