@@ -219,7 +219,8 @@ class WellArrayLineSelector:
         # self._im.set_data(self._well[np.argmax(self._lines_arr[cell_id, :]), :, :])
         self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
         self._selected.set_data((self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 1]))
-        self._ax2.set_ylim((np.min(self._lines_arr), np.max(self._lines_arr)))
+        # self._ax2.set_ylim((np.min(self._lines_arr), np.max(self._lines_arr)))
+        self._ax2.set_ylim((-100, np.max(self._lines_arr)))
         self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
