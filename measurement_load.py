@@ -109,7 +109,7 @@ def load_high_freq_measurement(dir_path):
 
     time = []
     time = pd.read_table(avg_path, skiprows=1, decimal=',')
-    time = np.asarray(time.iloc[:,0]) * 60
+    time = np.asarray(time.iloc[:,0])
     print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
 
