@@ -31,8 +31,13 @@ def load_measurement(dir_path):
     
     avg_path = os.path.join(dir_path, files[0])
     
+    meas_mode = 'normal' if os.path.getsize(wl_power_path) == 614400 else 'high'
+    
+    print(f"Measurement mode {meas_mode}")
+    
     fr = open( wl_power_path, "rb")
-    init_map = np.frombuffer(fr.read(614400), dtype='float32')
+    init_map = np.frombuffer(fr.read(614400), dtype='float32' if meas_mode == 'normal' else 'uint16')
+    print(init_map.shape)
     init_wl_map = np.reshape(init_map[:76800], [240, 320])
     fr.close()
 
@@ -42,15 +47,70 @@ def load_measurement(dir_path):
     timestep_mats = np.zeros([len(sorted_files),240,320])
     for i in range(len(sorted_files)):
         step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
-        A_int = np.frombuffer(step.read(153600), dtype='uint16')
-        step.close()
+        A_int = np.frombuffer(step.read(153600), dtype='uint16' if meas_mode == 'normal' else 'uint8')
         timestep_mats[i,:,:] = np.reshape(A_int,[240,320])
+        step.close()
 
     WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
 
     time = []
     time = pd.read_table(avg_path, skiprows=1, decimal=',')
     time = np.asarray(time.iloc[:,0]) * 60
+    print(f"Measurement loaded {WL_map.shape} time {time.shape}")
+    return WL_map, time
+
+def load_high_freq_measurement(dir_path):
+    '''
+        Load the well image from a project folder created by the Epic Cardio. 
+        Required folders/files are the DMR folder, the test_WL_Power and the
+        test_avg file.
+        
+        Parameters
+        ----------
+        dir_path: the path to the folder
+    '''
+    S = 0.0002
+    files = [ obj for obj in os.listdir(dir_path) if '_ms' == obj.lower()[-3:]]
+    
+    if len(files) == 0:
+        print("Missing test wl power file!!!")
+        return None
+    
+    wl_power_path = os.path.join(dir_path, files[0])
+    
+    files = [ obj for obj in os.listdir(dir_path) if '_avg' in obj.lower()]
+    
+    if len(files) == 0:
+        print("Missing test avg!!!")
+        return None
+    
+    avg_path = os.path.join(dir_path, files[0])
+    
+    print(wl_power_path)
+    print(avg_path)
+    
+    fr = open( wl_power_path, "rb")
+    init_map = np.frombuffer(fr.read(614400), dtype='uint16')
+    print(init_map.shape)
+    init_wl_map = np.reshape(init_map[:76800], [240, 320])
+    fr.close()
+
+    sorted_files = os.listdir(os.path.join(dir_path, 'fDMR'))
+    sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
+
+    timestep_mats = np.zeros([len(sorted_files),240,320])
+    for i in range(len(sorted_files)):
+        step = open(os.path.join(dir_path, f'fDMR/{i + 1}'), 'rb')
+        A_int = np.frombuffer(step.read(153600), dtype='uint8')
+        timestep_mats[i,:,:] = np.reshape(A_int,[240,320])
+        step.close()
+
+    WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
+
+    time = []
+    time = pd.read_table(avg_path, skiprows=1, decimal=',')
+    time = np.asarray(time.iloc[:,0]) * 60
+    print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
 
 def load_measurement_bt(dir_path):
