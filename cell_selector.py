@@ -187,6 +187,8 @@ class WellArrayLineSelector:
         self._well_id = 0
         self._wells_data = wells_data
         
+        self.texts = []
+        
         self.change_well()
 
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
@@ -211,6 +213,10 @@ class WellArrayLineSelector:
             self._i = 1
             if hasattr(self, '_im'):
                 self._im.set_data(self._well)
+            if len(self.texts) > 0:
+                for txt in self.texts:
+                    txt.remove()
+                self.texts.clear()
 
     def draw_plot(self, cell_id):
         self._elm.set_data((np.linspace(0, self._lines_arr.shape[1], self._lines_arr.shape[1]) * 12, self._lines_arr[cell_id, :]))
@@ -240,6 +246,8 @@ class WellArrayLineSelector:
         if self._i - 1 not in self.saved_ids:
             # lines_selected.append(lines_arr[i[0] - 1, :])
             self.saved_ids[self._ids[self._well_id]].append(self._i - 1)
+            txt = self._ax1.text(self._pts_arr[self._i - 1, 0] + 1, self._pts_arr[self._i - 1, 1], f"{len(self.saved_ids[self._ids[self._well_id]]) - 1}", color='white')
+            self.texts.append(txt)
         self.on_button_plus_clicked(b)
         
     def on_press(self, event):
