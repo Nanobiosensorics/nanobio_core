@@ -141,3 +141,9 @@ def load_measurement_bt(dir_path):
         time = pd.read_table(dir_path + '/test_avg', skiprows=1, decimal=',')
         time = np.asarray(time.iloc[:,0]) * 60
     return WL_map, time
+
+def wl_map_to_wells(wl_map, flip=False):
+    WIDTH = 80
+    WELL_IDS = [['C1', 'C2', 'C3', 'C4'], ['B1', 'B2', 'B3', 'B4'], ['A1', 'A2', 'A3', 'A4']]
+    return {name: np.flip(wl_map[:, i : i+WIDTH, j:j+WIDTH], axis=1) if flip else wl_map[:, i : i+WIDTH, j:j+WIDTH] 
+            for names, i in zip(WELL_IDS, range(0, 240, WIDTH)) for name, j in zip(names, range(0, 320, WIDTH))}
