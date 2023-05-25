@@ -44,7 +44,7 @@ class CardioMicFitter:
             plt.close(self._fig)
             self.closed = True
         else:
-            self._well = cv2.resize(get_max_well(self._wells_data[self._ids[self._well_id]][0]), (CardioMicFitter.EPIC_CARDIO_SCALE, CardioMicFitter.EPIC_CARDIO_SCALE), interpolation=cv2.INTER_NEAREST)
+            self._well = cv2.resize(get_max_well(self._wells_data[self._ids[self._well_id]]), (CardioMicFitter.EPIC_CARDIO_SCALE, CardioMicFitter.EPIC_CARDIO_SCALE), interpolation=cv2.INTER_NEAREST)
             self._mic = self._mics_data[self._ids[self._well_id]]
             if hasattr(self, '_im'):
                 self._im.set_data(self._mic)
