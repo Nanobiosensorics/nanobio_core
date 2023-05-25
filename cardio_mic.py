@@ -87,6 +87,10 @@ class CardioMicFitter:
             self.distance = 200
         elif evt.key == '8':
             self.distance = 500
+        elif evt.key == 'n':
+            self._well_id += 1
+            self.change_well()
+            self.draw_plot()            
         elif evt.key == 'enter':
             self._ax.set_title(None)
             self._fig.savefig(os.path.join(self.result_path, self._ids[self._well_id] + '_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
