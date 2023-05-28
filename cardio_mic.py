@@ -36,6 +36,7 @@ class CardioMicFitter:
                                                self.translation[1] + self._well.shape[1], self.translation[1]],)
         self._ax.set_title(f'Well {self._ids[self._well_id]}, Current translation {self.translation}, speed {self.distance}')
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
+        self._fig.canvas.mpl_connect('button_press_event', self.on_press)
         self.draw_plot()
         plt.show(block=block)
     
@@ -59,44 +60,50 @@ class CardioMicFitter:
         self._fig.canvas.draw()
         
     def on_press(self, evt):
-        if evt.key == 'right':
-            self.translation[0] = self.translation[0] + self.distance # if translation[0] + distance < im_dst.shape[1] else im_dst.shape[1]
-            self.draw_plot()
-        elif evt.key == 'left':
-            self.translation[0] = self.translation[0] - self.distance # if translation[0] - distance > 0 else 0
-            self.draw_plot()
-        elif evt.key == 'down':
-            self.translation[1] = self.translation[1] + self.distance # if translation[1] + distance < im_dst.shape[0] else im_dst.shape[0]
-            self.draw_plot()
-        elif evt.key == 'up':
-            self.translation[1] = self.translation[1] - self.distance # if translation[1] - distance > 0 else 0
-            self.draw_plot()
-        elif evt.key == '1':
-            self.distance = 1
-        elif evt.key == '2':
-            self.distance = 5
-        elif evt.key == '3':
-            self.distance = 10
-        elif evt.key == '4':
-            self.distance = 20
-        elif evt.key == '5':
-            self.distance = 50
-        elif evt.key == '6':
-            self.distance = 100
-        elif evt.key == '7':
-            self.distance = 200
-        elif evt.key == '8':
-            self.distance = 500
-        elif evt.key == 'n':
-            self._well_id += 1
-            self.change_well()
-            self.draw_plot()            
-        elif evt.key == 'enter':
-            self._ax.set_title(None)
-            self._fig.savefig(os.path.join(self.result_path, self._ids[self._well_id] + '_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
-            self.translations.append(self.translation.copy())
-            self._well_id += 1
-            self.change_well()
-            self.draw_plot()
+        if hasattr(evt, 'button'):
+            if evt.xdata != None and evt.ydata != None:
+                self.translation[0] = round(evt.xdata)
+                self.translation[1] = round(evt.ydata)
+                self.draw_plot()
+        elif evt.key != None:
+            if evt.key == 'right':
+                self.translation[0] = self.translation[0] + self.distance # if translation[0] + distance < im_dst.shape[1] else im_dst.shape[1]
+                self.draw_plot()
+            elif evt.key == 'left':
+                self.translation[0] = self.translation[0] - self.distance # if translation[0] - distance > 0 else 0
+                self.draw_plot()
+            elif evt.key == 'down':
+                self.translation[1] = self.translation[1] + self.distance # if translation[1] + distance < im_dst.shape[0] else im_dst.shape[0]
+                self.draw_plot()
+            elif evt.key == 'up':
+                self.translation[1] = self.translation[1] - self.distance # if translation[1] - distance > 0 else 0
+                self.draw_plot()
+            elif evt.key == '1':
+                self.distance = 1
+            elif evt.key == '2':
+                self.distance = 5
+            elif evt.key == '3':
+                self.distance = 10
+            elif evt.key == '4':
+                self.distance = 20
+            elif evt.key == '5':
+                self.distance = 50
+            elif evt.key == '6':
+                self.distance = 100
+            elif evt.key == '7':
+                self.distance = 200
+            elif evt.key == '8':
+                self.distance = 500
+            elif evt.key == 'n':
+                self._well_id += 1
+                self.change_well()
+                self.draw_plot()            
+            elif evt.key == 'enter':
+                self._ax.set_title(None)
+                self._fig.savefig(os.path.join(self.result_path, self._ids[self._well_id] + '_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
+                self.translations.append(self.translation.copy())
+                self._well_id += 1
+                self.change_well()
+                self.draw_plot()
         self._ax.set_title(f'Well {self._ids[self._well_id]}, Current translation {self.translation}, speed {self.distance}')
         self._fig.canvas.draw()
