@@ -4,18 +4,13 @@ import numpy as np
 import cv2
 import os
 
-class CardioMicFitter:
-    # Az első a 5x, a második a 20x
-    MIC_PX_PER_MM = 2134 / 2.22
-    # MIC_PX_PER_MM = 2134 * 1.81
+class CardioMicScaling:
+    MIC_5X = 2134 / 2.22
+    MIC_20X = 2134 * 1.81
 
-    MIC_PX_PER_UM = MIC_PX_PER_MM / 1000
-    EPIC_PX_PER_UM = 1/25
-    EPIC_CARDIO_SCALE = int(80 * (MIC_PX_PER_UM / EPIC_PX_PER_UM) * 0.978)
-    MIC_UM_PER_PX = 1 / MIC_PX_PER_UM
-    MIC_PX_AREA = MIC_UM_PER_PX**2
+class CardioMicFitter:
     _ids = [ 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
-    def __init__(self, wells_data, mics_data, result_path, block=True):
+    def __init__(self, wells_data, mics_data, result_path, scaling=CardioMicScaling.MIC_5X, block=True):
         self.closed = False
         self._well_id = 0
         self._wells_data = wells_data
@@ -25,6 +20,7 @@ class CardioMicFitter:
         self.translation = np.array([1420, 955])
         self.distance = 100
         self.result_path = result_path
+        self.scale = self._get_scale(scaling)
         
         self.change_well()
 
@@ -39,13 +35,21 @@ class CardioMicFitter:
         self._fig.canvas.mpl_connect('button_press_event', self.on_press)
         self.draw_plot()
         plt.show(block=block)
+        
+    def _get_scale(self, scaling):
+        MIC_PX_PER_UM = scaling / 1000
+        EPIC_PX_PER_UM = 1/25
+        EPIC_CARDIO_SCALE = int(80 * (MIC_PX_PER_UM / EPIC_PX_PER_UM) * 0.978)
+        MIC_UM_PER_PX = 1 / MIC_PX_PER_UM
+        MIC_PX_AREA = MIC_UM_PER_PX**2
+        return EPIC_CARDIO_SCALE
     
     def change_well(self):
         if self._well_id == len(self._ids):
             plt.close(self._fig)
             self.closed = True
         else:
-            self._well = cv2.resize(get_max_well(self._wells_data[self._ids[self._well_id]]), (CardioMicFitter.EPIC_CARDIO_SCALE, CardioMicFitter.EPIC_CARDIO_SCALE), interpolation=cv2.INTER_NEAREST)
+            self._well = cv2.resize(get_max_well(self._wells_data[self._ids[self._well_id]]), (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
             self._mic = self._mics_data[self._ids[self._well_id]]
             if hasattr(self, '_im'):
                 self._im.set_data(self._mic)
