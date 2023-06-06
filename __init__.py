@@ -6,4 +6,4 @@ from .data_correction import corr_data, correct_well
 from .math_ops import get_unique_coords, get_coord_frequency, euclid_dist, get_adjacency_matrix, get_cluster_centeroid, calculate_cell_maximas
 from .math_ops import get_adj_cluster, get_most_selected, calculate_cells, standardize_signal, destandardize_signal, get_max_well, signal_segments, signal_jumps_in_well, total_signal_jumps_in_measurement, image_resize
 from .tmp import display_active_coords
-from .cardio_mic import CardioMicFitter, CardioMicScaling
+from .cardio_mic import CardioMicFitter, CardioMicScaling, CardioMicFitterMultipleWell
