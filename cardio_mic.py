@@ -15,7 +15,7 @@ class CardioMicFitter:
         self.translation = np.array([1420, 955])
         self.distance = 100
         self.result_path = result_path
-        self.scale = self._get_scale(scaling)
+        self.scale, _ = self._get_scale(scaling)
         self._mic, self._well = mic, cv2.resize(get_max_well(well), (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
         
         self._fig, self._ax = plt.subplots(figsize=(16, 8))
@@ -36,7 +36,7 @@ class CardioMicFitter:
         EPIC_CARDIO_SCALE = int(80 * (MIC_PX_PER_UM / EPIC_PX_PER_UM) * 0.978)
         MIC_UM_PER_PX = 1 / MIC_PX_PER_UM
         MIC_PX_AREA = MIC_UM_PER_PX**2
-        return EPIC_CARDIO_SCALE
+        return EPIC_CARDIO_SCALE, MIC_UM_PER_PX
 
     def draw_plot(self):
         self._elm.set_extent([self.translation[0], self.translation[0]  + self._well.shape[0],
