@@ -5,6 +5,8 @@ import numpy as np
 from .funcs import *
 from ..epic_cardio.math_ops import get_max_well
 from datetime import datetime
+import os
+import pandas as pd
 
 class SingleCellDisplayContour:
     CELL = 0,
@@ -22,6 +24,7 @@ class CardioMicSingleCellEvaluator():
         self.idx = 0
         self.well = well
         self.translation = translation
+        self.scale = scale
         
         # Image slicing
 
@@ -147,11 +150,13 @@ class CardioMicSingleCellEvaluator():
         print(f'Duration {datetime.now() - now}')
         return markers_selected, im_markers_selected
     
-    def display(self, resolution = 1):
+    def display(self, resolution = 1, px_range = 5):
         
         # Image transformation
         
         self.resolution = resolution
+        self.px_range = px_range
+        self.scaled_px_range = int(self.scale / 80 * px_range)
         
         self.im_cardio_tr, self.im_mic_tr, self.im_markers_tr, \
             self.im_pxs_tr, self.im_contour_tr, self.centers_tr = CardioMicSingleCellEvaluator._transform_resolution(self.im_cardio, \
@@ -198,8 +203,8 @@ class CardioMicSingleCellEvaluator():
         self.draw_plot()
         
     def change_ax_limit(self, x_center, y_center):
-        self.ax_cell.set_xlim((x_center - 100 * self.resolution, x_center + 100 * self.resolution))
-        self.ax_cell.set_ylim((y_center + 100 * self.resolution, y_center - 100 * self.resolution))
+        self.ax_cell.set_xlim((x_center - self.scaled_px_range * self.resolution, x_center + self.scaled_px_range * self.resolution))
+        self.ax_cell.set_ylim((y_center + self.scaled_px_range * self.resolution, y_center - self.scaled_px_range * self.resolution))
         self.crnt_pt.set_data(((x_center),(y_center)))
 
     def draw_plot(self):
@@ -261,3 +266,41 @@ class CardioMicSingleCellEvaluator():
             self.on_button_minus_clicked(None)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
+            
+    def save(self, path, px_range = 3):
+        if len(self.selected_coords) > 0:
+            slaced_px_range = int(self.scale / 80 * px_range)
+            max_signals = np.zeros((len(self.selected_coords), self.well.shape[0]))
+            cover_signals = np.zeros((len(self.selected_coords), self.well.shape[0]))
+            # weigthed_cover_signals = np.zeros((len(selected_coords), im_src.shape[0]))
+            cell_areas = np.zeros(len(self.selected_coords))
+            cell_mic_centers = np.zeros((len(self.selected_coords), 2))
+            cell_cardio_centers = np.zeros((len(self.selected_coords), 2))
+            cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3))
+            cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range))
+            cell_cardio = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range))
+            now = datetime.now()
+            for i, cell_id in enumerate(sorted(self.selected_coords)):
+                print(f'Progress {i + 1}/{len(self.selected_coords)}', end='\r')
+                max_signals[i, :] = get_max_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, self.im_markers, self.im_pxs)
+                cover_signals[i, :] = get_cover_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, self.im_markers, self.im_pxs)
+            #     weigthed_cover_signals[i, :] = get_weighted_cover_px_signal_by_cell_id(self.markers[cell_id], self.im_cardio, self.im_markers, self.im_pxs)
+                cell_areas[i] = get_area_by_cell_id(self.markers[cell_id], self.im_markers, self.px_size)
+                cell_center = self.centers[cell_id]
+                cell_mic_centers[i] = cell_center
+                cardio_center = (self.centers[cell_id] / self.scale * 80).astype(int)
+                cell_center = (cardio_center / 80 * self.scale).astype(int)
+                cell_cardio_centers[i] = cardio_center
+                
+                cell_mics[i] = self.im_mic[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
+                cell_markers[i] = self.im_markers[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
+                cell_cardio[i] = self.well[:, cardio_center[1] - px_range : cardio_center[1] + px_range, cardio_center[0] - px_range: cardio_center[0] + px_range]
+                
+                # cell mic image, cardio video, coordinates
+            print(f'Duration {datetime.now() - now}')
+            pd.DataFrame(max_signals).to_csv(os.path.join(path, 'max_signals.csv'))
+            pd.DataFrame(cover_signals).to_csv(os.path.join(path, 'int_signals.csv'))
+            pd.DataFrame(cell_areas).to_csv(os.path.join(path, 'areas.csv'))
+            pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, 'mic_centers.csv'))
+            pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, 'cardio_centers.csv'))
+            np.savez(os.path.join(path, 'segmentation.npz'), cardio=cell_cardio, mic=cell_mics, marker=cell_markers)
