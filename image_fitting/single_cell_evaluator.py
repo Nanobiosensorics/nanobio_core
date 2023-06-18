@@ -14,14 +14,13 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, im_mic, im_mask, scale, translation, px_size, resolution = 1, 
+    def __init__(self, well, im_mic, im_mask, scale, translation, px_size, 
                  display_contours: list = [
                     SingleCellDisplayContour.ALL,   
                  ]):
         self.disp = display_contours
         self.idx = 0
         self.well = well
-        self.resolution = resolution
         self.translation = translation
         
         # Image slicing
@@ -49,57 +48,15 @@ class CardioMicSingleCellEvaluator():
         
         self.markers = markers
         
-        # Image transformation
         
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
-        im_contour = get_contour(im_contour, 1)
+        self.im_contour = get_contour(im_contour, 1)
         
-        self.im_cardio, self.im_mic, self.im_markers, \
-            self.im_pxs, self.im_contour, self.centers = CardioMicSingleCellEvaluator._transform_resolution(im_cardio, \
-                im_mic, im_markers, im_pxs, im_contour, centers, im_cardio.shape, resolution)
+        self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
         
         self.px_size = px_size
         self.selected_coords = []
-
-    def display(self):
-        self.fig, self.ax = plt.subplots(2, 2, figsize=(16, 12))
-        self.ax_mic = self.ax[0, 0]
-        self.ax_cell = self.ax[1, 0]
-        self.ax_max = self.ax[0, 1]
-        self.ax_int = self.ax[1, 1]
-        self.ax_mic.axes.get_xaxis().set_visible(False)
-        self.ax_mic.axes.get_yaxis().set_visible(False)
-        self.ax_cell.axes.get_xaxis().set_visible(False)
-        self.ax_cell.axes.get_yaxis().set_visible(False)
-        self.ax_mic.set_position([0, 0.525, .45, .45])
-        self.ax_cell.set_position([0, 0.025, .45, .45])
-
-        self.ax_mic.imshow(self.im_mic)
-        self.ax_mic.imshow(self.im_cardio, alpha=.4, 
-                        vmin = np.mean(self.im_cardio) - 3*np.std(self.im_cardio), 
-                        vmax = np.mean(self.im_cardio) + 3*np.std(self.im_cardio))
-        self.ax_cell.imshow(self.im_mic)
-        self.ax_cell.imshow(self.im_cardio, alpha=.4, 
-                        vmin = np.mean(self.im_cardio) - 3*np.std(self.im_cardio), 
-                        vmax = np.mean(self.im_cardio) + 3*np.std(self.im_cardio))
-        self.ax_max.set_ylim((-.05, 2500))
-        self.ax_int.set_ylim((np.min(self.well), np.max(self.well)))
-        self.ax_mic.set_title('Cells')
-        self.ax_max.set_title('Max pixel signal')
-        self.ax_int.set_title('Integrated pixels signal')
-        # ax[2, 1].set_title('Integrated weighted pixels signal')
-        self.disp_pts, = self.ax_mic.plot(self.centers[:, 0], self.centers[:, 1], 'bo', markersize=3)
-        self.crnt_pt, = self.ax_mic.plot(self.centers[0, 0],self.centers[0, 1], 'bo', markersize=10, mfc='none')
-        self.selected_pts, =  self.ax_mic.plot( [], [], 'ro', markersize=3)
-        self.line_max, = self.ax_max.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
-        self.line_int, = self.ax_int.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
-        # elm6, = ax[2, 1].plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
-        
-        self.fig.canvas.mpl_connect('key_press_event', self.on_press)
-        self.fig.canvas.mpl_connect('button_press_event', self.on_mouse_button_press)
-
-        self.draw_plot()
     
     @classmethod
     def _get_slicer(self, shape, scale, translation):
@@ -189,6 +146,56 @@ class CardioMicSingleCellEvaluator():
         im_markers_selected = mask_centers(im_markers_sliced, markers_selected)
         print(f'Duration {datetime.now() - now}')
         return markers_selected, im_markers_selected
+    
+    def display(self, resolution = 1):
+        
+        # Image transformation
+        
+        self.resolution = resolution
+        
+        self.im_cardio_tr, self.im_mic_tr, self.im_markers_tr, \
+            self.im_pxs_tr, self.im_contour_tr, self.centers_tr = CardioMicSingleCellEvaluator._transform_resolution(self.im_cardio, \
+                self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers, self.im_cardio.shape, resolution)
+            
+        # Display
+        
+        self.fig, self.ax = plt.subplots(2, 2, figsize=(16, 12))
+        self.ax_mic = self.ax[0, 0]
+        self.ax_cell = self.ax[1, 0]
+        self.ax_max = self.ax[0, 1]
+        self.ax_int = self.ax[1, 1]
+        self.ax_mic.axes.get_xaxis().set_visible(False)
+        self.ax_mic.axes.get_yaxis().set_visible(False)
+        self.ax_cell.axes.get_xaxis().set_visible(False)
+        self.ax_cell.axes.get_yaxis().set_visible(False)
+        self.ax_mic.set_position([0, 0.525, .45, .45])
+        self.ax_cell.set_position([0, 0.025, .45, .45])
+
+        self.ax_mic.imshow(self.im_mic_tr)
+        self.ax_mic.imshow(self.im_cardio_tr, alpha=.4, 
+                        vmin = np.mean(self.im_cardio_tr) - 3*np.std(self.im_cardio_tr), 
+                        vmax = np.mean(self.im_cardio_tr) + 3*np.std(self.im_cardio_tr))
+        self.ax_cell.imshow(self.im_mic_tr)
+        self.ax_cell.imshow(self.im_cardio_tr, alpha=.4, 
+                        vmin = np.mean(self.im_cardio_tr) - 3*np.std(self.im_cardio_tr), 
+                        vmax = np.mean(self.im_cardio_tr) + 3*np.std(self.im_cardio_tr))
+        self.ax_max.set_ylim((-.05, 2500))
+        self.ax_int.set_ylim((np.min(self.well), np.max(self.well)))
+        self.ax_mic.set_title('Cells')
+        self.ax_max.set_title('Max pixel signal')
+        self.ax_int.set_title('Integrated pixels signal')
+        # ax[2, 1].set_title('Integrated weighted pixels signal')
+        self.disp_pts, = self.ax_mic.plot(self.centers_tr[:, 0], self.centers_tr[:, 1], 'bo', markersize=3)
+        self.crnt_pt, = self.ax_mic.plot(self.centers_tr[0, 0],self.centers_tr[0, 1], 'bo', markersize=10, mfc='none')
+        self.selected_pts, =  self.ax_mic.plot( [], [], 'ro', markersize=3)
+        self.line_max, = self.ax_max.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
+        self.line_int, = self.ax_int.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
+        # elm6, = ax[2, 1].plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
+        
+        self.fig.canvas.mpl_connect('key_press_event', self.on_press)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_mouse_button_press)
+
+        self.draw_plot()
         
     def change_ax_limit(self, x_center, y_center):
         self.ax_cell.set_xlim((x_center - 100 * self.resolution, x_center + 100 * self.resolution))
@@ -197,31 +204,31 @@ class CardioMicSingleCellEvaluator():
 
     def draw_plot(self):
         self.ax_cell.patches = []
-        self.ax_cell.set_title(f'Cell {self.idx + 1}/{len(self.markers)}, Area {np.round(get_area_by_cell_id(self.markers[self.idx], self.im_markers, self.px_size), 2)} μm²')
-        self.change_ax_limit(self.centers[self.idx, 0], self.centers[self.idx, 1])
+        self.ax_cell.set_title(f'Cell {self.idx + 1}/{len(self.markers)}, Area {np.round(get_area_by_cell_id(self.markers[self.idx], self.im_markers_tr, self.px_size), 2)} μm²')
+        self.change_ax_limit(self.centers_tr[self.idx, 0], self.centers_tr[self.idx, 1])
         if SingleCellDisplayContour.CELL in self.disp or SingleCellDisplayContour.ALL in self.disp:
-            cont = get_cell_contour(self.markers[self.idx], self.im_cardio, 
-                                    self.im_markers, self.im_pxs)
+            cont = get_cell_contour(self.markers[self.idx], self.im_cardio_tr, 
+                                    self.im_markers_tr, self.im_pxs_tr)
             self.ax_cell.add_patch(cont)
         if SingleCellDisplayContour.COVER in self.disp or SingleCellDisplayContour.ALL in self.disp:
-            cont = get_cover_px_contour(self.markers[self.idx], self.im_cardio, 
-                                    self.im_markers, self.im_pxs)
+            cont = get_cover_px_contour(self.markers[self.idx], self.im_cardio_tr, 
+                                    self.im_markers_tr, self.im_pxs_tr)
             self.ax_cell.add_patch(cont)
         if SingleCellDisplayContour.MAX in self.disp or SingleCellDisplayContour.ALL in self.disp:
-            cont = get_max_px_contour(self.markers[self.idx], self.im_cardio, 
-                                    self.im_markers, self.im_pxs)
+            cont = get_max_px_contour(self.markers[self.idx], self.im_cardio_tr, 
+                                    self.im_markers_tr, self.im_pxs_tr)
             self.ax_cell.add_patch(cont)
-        self.selected_pts.set_data((self.centers[self.selected_coords, 0], self.centers[self.selected_coords, 1]))
-        sig = get_max_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, 
-                                self.im_markers, self.im_pxs)
+        self.selected_pts.set_data((self.centers_tr[self.selected_coords, 0], self.centers_tr[self.selected_coords, 1]))
+        sig = get_max_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio_tr, 
+                                self.im_markers_tr, self.im_pxs_tr)
         self.line_max.set_data((np.linspace(0, self.well.shape[0], self.well.shape[0]), sig))
         self.ax_max.set_ylim((-.05, np.max(sig)))
-        sig = get_cover_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, 
-                                self.im_markers, self.im_pxs)
+        sig = get_cover_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio_tr, 
+                                self.im_markers_tr, self.im_pxs_tr)
         self.line_int.set_data((np.linspace(0, self.well.shape[0], self.well.shape[0]), sig))
         self.ax_int.set_ylim((np.min(sig), np.max(sig)))
-    #     sig = get_weighted_cover_px_signal_by_cell_id(self.markers[self.idx], self.im_cardio, 
-    #                             self.im_markers, self.im_pxs)
+    #     sig = get_weighted_cover_px_signal_by_cell_id(self.markers[self.idx], self.im_cardio_tr, 
+    #                             self.im_markers_tr, self.im_pxs_tr)
     #     elm6.set_data((np.linspace(0, self.well.shape[0], self.well.shape[0]), sig))
     #     ax[2, 1].set_ylim((np.min(sig), np.max(sig)))
         self.fig.canvas.draw()
@@ -241,7 +248,7 @@ class CardioMicSingleCellEvaluator():
 
     def on_mouse_button_press(self, evt):
         if evt.inaxes in [self.ax_mic]:
-            ret = get_closest_coords((evt.xdata, evt.ydata), self.centers)
+            ret = get_closest_coords((evt.xdata, evt.ydata), self.centers_tr)
             if ret is not None:
                 idx, cd = ret
                 self.idx = idx
