@@ -12,21 +12,22 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, im_cardio, im_mic, im_markers, im_pxs, im_contour, markers, centers, px_size, resolution = 1, 
+    def __init__(self, well, im_cardio, im_mic, im_markers, im_pxs, im_contour, markers, centers, px_size, resolution = 1, transform = True,
                  display_contours = [
                     SingleCellDisplayContour.ALL,   
                  ]):
         self.disp = display_contours
         self.idx = 0
         self.well = well
-        self.im_cardio = im_cardio
-        self.im_mic = im_mic
-        self.im_markers = im_markers
-        self.im_pxs = im_pxs
-        self.im_contour = im_contour
         self.markers = markers
-        self.centers = centers
         self.resolution = resolution
+        
+        if transform:
+            self.im_cardio, self.im_mic, self.im_markers, \
+                self.im_pxs, self.im_contour, self.centers = CardioMicSingleCellEvaluator._transform_resolution(im_cardio, \
+                    im_mic, im_markers, im_pxs, im_contour, centers, im_cardio.shape, resolution)
+        else:
+            self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
         self.px_size = px_size
         self.selected_coords = []
         # button_plus = widgets.Button(description="⮞")
@@ -85,7 +86,41 @@ class CardioMicSingleCellEvaluator():
         self.fig.canvas.mpl_connect('button_press_event', self.on_mouse_button_press)
 
         self.draw_plot()
+       
+    @classmethod 
+    def _transform_resolution(self, im_cardio, im_mic, im_markers, im_pxs, im_contour, centers, shape, resolution = 1):
+        if resolution == 1:
+            return im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
 
+        im_contour = np.zeros(im_markers.shape).astype('uint8')
+        im_contour[im_markers > 0] = 1
+        im_contour = get_contour(im_contour, 1)
+        
+
+        im_cardio_tr = cv2.resize(im_cardio, 
+                        (round(shape[1] * resolution), round(shape[0] * resolution)), 
+                        interpolation=cv2.INTER_NEAREST)
+        im_mic_tr = cv2.resize(im_mic, 
+                        (round(shape[1] * resolution), round(shape[0] * resolution)), 
+                        interpolation=cv2.INTER_NEAREST)
+        im_markers_tr = cv2.resize(im_markers.astype('uint16'), 
+                            (round(shape[1] * resolution), round(shape[0] * resolution)), 
+                            interpolation=cv2.INTER_NEAREST)
+        im_pxs_tr = cv2.resize(im_pxs.astype('uint16'), 
+                            (round(im_pxs.shape[1] * resolution), round(im_pxs.shape[0] * resolution)), 
+                            interpolation=cv2.INTER_NEAREST)
+        im_contour_tr = cv2.resize(im_contour, 
+                            (round(shape[1] * resolution), round(shape[0] * resolution)), 
+                            interpolation=cv2.INTER_NEAREST)
+
+        centers_tr = []
+        for coord in centers:
+            centers_tr.append(
+                (coord[0] / (shape[0]) * (shape[0] * resolution), 
+                coord[1] / (shape[1]) * (shape[1] * resolution)))
+        centers_tr = np.asarray(centers_tr)
+        return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, centers_tr
+        
     def change_ax_limit(self, x_center, y_center):
         self.ax_cell.set_xlim((x_center - 100 * self.resolution, x_center + 100 * self.resolution))
         self.ax_cell.set_ylim((y_center + 100 * self.resolution, y_center - 100 * self.resolution))
