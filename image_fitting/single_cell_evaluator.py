@@ -12,7 +12,7 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, im_cardio, im_mic, im_markers, im_pxs, im_contour, markers, centers, px_size, resolution = 1, transform = True,
+    def __init__(self, well, im_cardio, im_mic, im_markers, im_pxs, markers, centers, px_size, resolution = 1, transform = True,
                  display_contours = [
                     SingleCellDisplayContour.ALL,   
                  ]):
@@ -22,6 +22,10 @@ class CardioMicSingleCellEvaluator():
         self.markers = markers
         self.resolution = resolution
         
+        im_contour = np.zeros(im_markers.shape).astype('uint8')
+        im_contour[im_markers > 0] = 1
+        im_contour = get_contour(im_contour, 1)
+        
         if transform:
             self.im_cardio, self.im_mic, self.im_markers, \
                 self.im_pxs, self.im_contour, self.centers = CardioMicSingleCellEvaluator._transform_resolution(im_cardio, \
@@ -30,13 +34,6 @@ class CardioMicSingleCellEvaluator():
             self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
         self.px_size = px_size
         self.selected_coords = []
-        # button_plus = widgets.Button(description="⮞")
-        # button_minus = widgets.Button(description="⮜")
-        # slider = widgets.IntSlider(value=1, min=1, max=len(self.centers) - 1)
-        # output = widgets.Output()
-        # home = widgets.Button(description="Home")
-        # box = widgets.HBox([button_minus, button_plus])
-        # display(box)
 
         self.fig, self.ax = plt.subplots(2, 2, figsize=(16, 12))
         self.ax_mic = self.ax[0, 0]
@@ -47,13 +44,8 @@ class CardioMicSingleCellEvaluator():
         self.ax_mic.axes.get_yaxis().set_visible(False)
         self.ax_cell.axes.get_xaxis().set_visible(False)
         self.ax_cell.axes.get_yaxis().set_visible(False)
-        # ax[2, 0].set_visible(False)
-        # ax[2, 1].set_visible(False)
         self.ax_mic.set_position([0, 0.525, .45, .45])
         self.ax_cell.set_position([0, 0.025, .45, .45])
-        # ax4.set_visible(True)
-        # ax.set_position([0, 0, .5, .5])
-        # ax2.set_position([0, .25, .5, .5])
 
         self.ax_mic.imshow(self.im_mic)
         self.ax_mic.imshow(self.im_cardio, alpha=.4, 
@@ -72,16 +64,10 @@ class CardioMicSingleCellEvaluator():
         self.disp_pts, = self.ax_mic.plot(self.centers[:, 0], self.centers[:, 1], 'bo', markersize=3)
         self.crnt_pt, = self.ax_mic.plot(self.centers[0, 0],self.centers[0, 1], 'bo', markersize=10, mfc='none')
         self.selected_pts, =  self.ax_mic.plot( [], [], 'ro', markersize=3)
-        # elm2 = ax.imshow(contour_img_display, alpha=.2)
-        # elm3 = ax[1, 0].imshow(contour_img_display, alpha=.2)
         self.line_max, = self.ax_max.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
         self.line_int, = self.ax_int.plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
         # elm6, = ax[2, 1].plot(np.linspace(0, self.well.shape[0], self.well.shape[0]), self.well[:, 0, 0])
         
-        # button_plus.on_click(on_button_plus_clicked)
-        # button_minus.on_click(on_button_minus_clicked)
-        # slider.observe(slider_change, names='value')
-        # home.on_click(home_onclick)
         self.fig.canvas.mpl_connect('key_press_event', self.on_press)
         self.fig.canvas.mpl_connect('button_press_event', self.on_mouse_button_press)
 
