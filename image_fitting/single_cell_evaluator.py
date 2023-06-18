@@ -3,6 +3,7 @@ import matplotlib as mpl
 import matplotlib
 import numpy as np
 from .funcs import *
+from datetime import datetime
 
 class SingleCellDisplayContour:
     CELL = 0,
@@ -12,29 +13,38 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, im_cardio, im_mic, im_markers, im_pxs, markers, centers, px_size, resolution = 1, transform = True,
-                 display_contours = [
+    def __init__(self, well, mask, im_cardio, im_mic, im_markers, im_pxs, px_size, translation, full_shape, resolution = 1, 
+                 display_contours: list = [
                     SingleCellDisplayContour.ALL,   
                  ]):
         self.disp = display_contours
         self.idx = 0
         self.well = well
-        self.markers = markers
         self.resolution = resolution
+        self.translation = translation
+        
+        filter_params = {
+            'area': (-np.Inf, np.Inf),
+            'max_value': (50, np.Inf),
+            'adjacent': False,
+        }
+        
+        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, mask, im_markers, im_pxs, translation, full_shape, px_size)
+        
+        self.markers = markers
         
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         im_contour = get_contour(im_contour, 1)
         
-        if transform:
-            self.im_cardio, self.im_mic, self.im_markers, \
-                self.im_pxs, self.im_contour, self.centers = CardioMicSingleCellEvaluator._transform_resolution(im_cardio, \
-                    im_mic, im_markers, im_pxs, im_contour, centers, im_cardio.shape, resolution)
-        else:
-            self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
+        self.im_cardio, self.im_mic, self.im_markers, \
+            self.im_pxs, self.im_contour, self.centers = CardioMicSingleCellEvaluator._transform_resolution(im_cardio, \
+                im_mic, im_markers, im_pxs, im_contour, centers, im_cardio.shape, resolution)
+        
         self.px_size = px_size
         self.selected_coords = []
 
+    def display(self):
         self.fig, self.ax = plt.subplots(2, 2, figsize=(16, 12))
         self.ax_mic = self.ax[0, 0]
         self.ax_cell = self.ax[1, 0]
@@ -106,6 +116,49 @@ class CardioMicSingleCellEvaluator():
                 coord[1] / (shape[1]) * (shape[1] * resolution)))
         centers_tr = np.asarray(centers_tr)
         return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, centers_tr
+    
+    @classmethod
+    def _cell_filtering(self, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
+        now = datetime.now()
+
+        markers_filter = im_markers_sliced.copy().astype(int)
+        unique_cell = np.unique(markers_filter)
+        markers_selected_1 = []
+        markers_excluded = []
+        for n, i in enumerate(unique_cell):
+            print(f'Single cell based filtering: {n + 1}/{len(unique_cell)}', end='\r' if n + 1 != len(unique_cell) else '\n')
+            y, x = (im_markers == i).nonzero()
+            if np.any(y <= translation[1]) or np.any(y >= translation[1] + shape[1]):
+                markers_excluded.append(i)
+                continue
+            if np.any(x <= translation[0]) or np.any(x >= translation[0] + shape[0]):
+                markers_excluded.append(i)
+                continue
+            ar = get_area_by_cell_id(i, im_markers, px_size)
+            mx = np.max(get_max_px_signal_by_cell_id(i, well, im_cardio_sliced, im_markers_sliced, im_pxs_sliced))
+            if (ar > filter_params['area'][0]) & (ar < filter_params['area'][1]) & (mx > filter_params['max_value'][0]) & (mx < filter_params['max_value'][1]):
+                markers_selected_1.append(i)
+                continue
+            else:
+                markers_excluded.append(i)
+                
+        if filter_params['adjacent']:
+            markers_selected = []
+            for n, i in enumerate(markers_selected_1):
+                print(f'Relational filtering: {n + 1}/{len(markers_selected_1)}', end='\r' if n + 1 != len(markers_selected_1) else '\n')
+                ngh = is_adjacent(i, markers_filter, im_pxs_sliced)
+                ngh = set(ngh) - set(markers_excluded) - set([i])
+                if len(ngh) != 0:
+                    continue
+                markers_selected.append(i)
+        else:
+            markers_selected = markers_selected_1
+        print(f'Duration {datetime.now() - now}')
+        print(f'Cell centers calculation')
+        now = datetime.now()
+        im_markers_selected = mask_centers(im_markers_sliced, markers_selected)
+        print(f'Duration {datetime.now() - now}')
+        return markers_selected, im_markers_selected
         
     def change_ax_limit(self, x_center, y_center):
         self.ax_cell.set_xlim((x_center - 100 * self.resolution, x_center + 100 * self.resolution))
