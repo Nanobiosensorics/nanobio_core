@@ -3,6 +3,7 @@ import matplotlib as mpl
 import matplotlib
 import numpy as np
 from .funcs import *
+from ..epic_cardio.math_ops import get_max_well
 from datetime import datetime
 
 class SingleCellDisplayContour:
@@ -13,7 +14,7 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, mask, im_cardio, im_mic, im_markers, im_pxs, px_size, translation, full_shape, resolution = 1, 
+    def __init__(self, well, im_mic, im_mask, scale, translation, px_size, resolution = 1, 
                  display_contours: list = [
                     SingleCellDisplayContour.ALL,   
                  ]):
@@ -23,15 +24,32 @@ class CardioMicSingleCellEvaluator():
         self.resolution = resolution
         self.translation = translation
         
+        # Image slicing
+
+        im_pxs = np.asarray([[ n + m * 80 for n in range(0, 80)] for m in range(0, 80) ])
+        im_pxs = cv2.resize(im_pxs, (scale, scale), interpolation=cv2.INTER_NEAREST)
+        im_cardio = cv2.resize(get_max_well(well), (scale, scale), interpolation=cv2.INTER_NEAREST)
+        
+        cardio_slice, mic_slice = CardioMicSingleCellEvaluator._get_slicer(im_mask.shape, (scale, scale), translation)
+
+        im_markers = im_mask[mic_slice]
+        im_mic = im_mic[mic_slice]
+        im_cardio = im_cardio[cardio_slice]
+        im_pxs = im_pxs[cardio_slice]
+        
+        # Image filtering
+        
         filter_params = {
             'area': (-np.Inf, np.Inf),
             'max_value': (50, np.Inf),
             'adjacent': False,
         }
         
-        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, mask, im_markers, im_pxs, translation, full_shape, px_size)
+        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, translation, (scale, scale), px_size)
         
         self.markers = markers
+        
+        # Image transformation
         
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
@@ -82,7 +100,19 @@ class CardioMicSingleCellEvaluator():
         self.fig.canvas.mpl_connect('button_press_event', self.on_mouse_button_press)
 
         self.draw_plot()
-       
+    
+    @classmethod
+    def _get_slicer(self, shape, scale, translation):
+        start_mic = np.array((max(translation[1], 0), 
+                    max(translation[0], 0)))
+        end_mic = np.flipud((translation + scale))
+        start_cardio = np.abs((min(0, translation[1]), min(0, translation[0])))
+        over_reach = (-(shape - np.flipud(scale + translation))).clip(min=0)
+        end_cardio = np.flipud(scale) - over_reach
+        mic_slice = (slice(start_mic[0], end_mic[0]), slice(start_mic[1], end_mic[1]))
+        cardio_slice = (slice(start_cardio[0], end_cardio[0]), slice(start_cardio[1], end_cardio[1]))
+        return cardio_slice, mic_slice
+        
     @classmethod 
     def _transform_resolution(self, im_cardio, im_mic, im_markers, im_pxs, im_contour, centers, shape, resolution = 1):
         if resolution == 1:
