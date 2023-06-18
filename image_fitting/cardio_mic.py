@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from .math_ops import get_max_well
+from ..epic_cardio.math_ops import get_max_well
 import numpy as np
 import cv2
 import os
