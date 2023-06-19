@@ -285,15 +285,15 @@ class CardioMicSingleCellEvaluator():
             for i, selected_id in enumerate(sorted(self.selected_coords)):
                 print(f'Progress {i + 1}/{len(self.selected_coords)}', end='\r')
                 cell_id = self.markers[selected_id]
-                cell_center = self.centers[selected_id]
+                cell_center = self.centers[selected_id].astype(int)
                 max_signals[i, :] = get_max_px_signal_by_cell_id(cell_id, self.well, self.im_cardio, self.im_markers, self.im_pxs)
                 cover_signals[i, :] = get_cover_px_signal_by_cell_id(cell_id, self.well, self.im_cardio, self.im_markers, self.im_pxs)
             #     weigthed_cover_signals[i, :] = get_weighted_cover_px_signal_by_cell_id(self.markers[cell_id], self.im_cardio, self.im_markers, self.im_pxs)
                 cell_areas[i] = get_area_by_cell_id(cell_id, self.im_markers, self.px_size)
-                cell_mic_centers[i] = cell_center
-                cardio_center = (cell_center / self.scale * 80).astype(int)
-                cell_center = (cardio_center / 80 * self.scale).astype(int)
+                px_center = evaluator.im_pxs[cell_center[1], cell_center[0]]
+                cardio_center = (px_center % 80, px_center // 80)
                 cell_cardio_centers[i] = cardio_center
+                cell_mic_centers[i] = cell_center
                 
                 cell_mics[i] = self.im_mic[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
                 cell_markers[i] = self.im_markers[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
