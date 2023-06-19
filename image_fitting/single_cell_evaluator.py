@@ -277,23 +277,29 @@ class CardioMicSingleCellEvaluator():
             cell_mic_centers = np.zeros((len(self.selected_coords), 2))
             cell_cardio_centers = np.zeros((len(self.selected_coords), 2))
             cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3))
+            cell_mics_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3))
             cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range))
+            cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range))
             cell_cardio = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range))
             now = datetime.now()
-            for i, cell_id in enumerate(sorted(self.selected_coords)):
+            for i, selected_id in enumerate(sorted(self.selected_coords)):
                 print(f'Progress {i + 1}/{len(self.selected_coords)}', end='\r')
-                max_signals[i, :] = get_max_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, self.im_markers, self.im_pxs)
-                cover_signals[i, :] = get_cover_px_signal_by_cell_id(self.markers[self.idx], self.well, self.im_cardio, self.im_markers, self.im_pxs)
+                cell_id = self.markers[selected_id]
+                cell_center = self.centers[selected_id]
+                max_signals[i, :] = get_max_px_signal_by_cell_id(cell_id, self.well, self.im_cardio, self.im_markers, self.im_pxs)
+                cover_signals[i, :] = get_cover_px_signal_by_cell_id(cell_id, self.well, self.im_cardio, self.im_markers, self.im_pxs)
             #     weigthed_cover_signals[i, :] = get_weighted_cover_px_signal_by_cell_id(self.markers[cell_id], self.im_cardio, self.im_markers, self.im_pxs)
-                cell_areas[i] = get_area_by_cell_id(self.markers[cell_id], self.im_markers, self.px_size)
-                cell_center = self.centers[cell_id]
+                cell_areas[i] = get_area_by_cell_id(cell_id, self.im_markers, self.px_size)
                 cell_mic_centers[i] = cell_center
-                cardio_center = (self.centers[cell_id] / self.scale * 80).astype(int)
+                cardio_center = (cell_center / self.scale * 80).astype(int)
                 cell_center = (cardio_center / 80 * self.scale).astype(int)
                 cell_cardio_centers[i] = cardio_center
                 
                 cell_mics[i] = self.im_mic[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
                 cell_markers[i] = self.im_markers[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
+                cell_mics_singular[i] = cell_mics[i].copy()
+                cell_mics_singular[i][cell_markers[i] != cell_id] = 0
+                cell_markers_singular[i] = cell_markers[i] == cell_id
                 cell_cardio[i] = self.well[:, cardio_center[1] - px_range : cardio_center[1] + px_range, cardio_center[0] - px_range: cardio_center[0] + px_range]
                 
                 # cell mic image, cardio video, coordinates
@@ -303,4 +309,4 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_areas).to_csv(os.path.join(path, 'areas.csv'))
             pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, 'mic_centers.csv'))
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, 'cardio_centers.csv'))
-            np.savez(os.path.join(path, 'segmentation.npz'), cardio=cell_cardio, mic=cell_mics, marker=cell_markers)
+            np.savez(os.path.join(path, 'segmentation.npz'), cardio=cell_cardio, mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
