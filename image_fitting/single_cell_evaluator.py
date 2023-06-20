@@ -295,12 +295,23 @@ class CardioMicSingleCellEvaluator():
                 cell_cardio_centers[i] = cardio_center
                 cell_mic_centers[i] = cell_center
                 
-                cell_mics[i] = self.im_mic[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
-                cell_markers[i] = self.im_markers[cell_center[1] - slaced_px_range : cell_center[1] + slaced_px_range, cell_center[0] - slaced_px_range: cell_center[0] + slaced_px_range]
+                ranges = ((max(cell_center[1] - slaced_px_range, 0), min(cell_center[1] + slaced_px_range, self.im_mic.shape[0])), 
+                          (max(cell_center[0] - slaced_px_range, 0), min(cell_center[0] + slaced_px_range, self.im_mic.shape[1])))
+                mic_slice = (slice(*ranges[0]), slice(*ranges[1]))
+                mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
+                
+                
+                ranges = ((max(cardio_center[1] - px_range, 0), min(cardio_center[1] + px_range, self.well.shape[1])), 
+                          (max(cardio_center[0] - px_range, 0), min(cardio_center[0] + px_range, self.well.shape[2])))
+                cardio_slice = (slice(*ranges[0]), slice(*ranges[1]))
+                cardio_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
+                
+                cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
+                cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
                 cell_mics_singular[i] = cell_mics[i].copy()
                 cell_mics_singular[i][cell_markers[i] != cell_id] = 0
                 cell_markers_singular[i] = cell_markers[i] == cell_id
-                cell_cardio[i] = self.well[:, cardio_center[1] - px_range : cardio_center[1] + px_range, cardio_center[0] - px_range: cardio_center[0] + px_range]
+                cell_cardio[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
                 
                 # cell mic image, cardio video, coordinates
             print(f'Duration {datetime.now() - now}')
