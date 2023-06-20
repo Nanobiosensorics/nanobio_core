@@ -290,7 +290,7 @@ class CardioMicSingleCellEvaluator():
                 cover_signals[i, :] = get_cover_px_signal_by_cell_id(cell_id, self.well, self.im_cardio, self.im_markers, self.im_pxs)
             #     weigthed_cover_signals[i, :] = get_weighted_cover_px_signal_by_cell_id(self.markers[cell_id], self.im_cardio, self.im_markers, self.im_pxs)
                 cell_areas[i] = get_area_by_cell_id(cell_id, self.im_markers, self.px_size)
-                px_center = evaluator.im_pxs[cell_center[1], cell_center[0]]
+                px_center = self.im_pxs[cell_center[1], cell_center[0]]
                 cardio_center = (px_center % 80, px_center // 80)
                 cell_cardio_centers[i] = cardio_center
                 cell_mic_centers[i] = cell_center
