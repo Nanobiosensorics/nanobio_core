@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import re
-    
+from string import ascii_uppercase
     
 def load_measurement(dir_path):
     '''
@@ -200,3 +200,19 @@ def wl_map_to_wells(wl_map, flip=False):
     WELL_IDS = [['C1', 'C2', 'C3', 'C4'], ['B1', 'B2', 'B3', 'B4'], ['A1', 'A2', 'A3', 'A4']]
     return {name: np.flip(wl_map[:, i : i+WIDTH, j:j+WIDTH], axis=1) if flip else wl_map[:, i : i+WIDTH, j:j+WIDTH] 
             for names, i in zip(WELL_IDS, range(0, 240, WIDTH)) for name, j in zip(names, range(0, 320, WIDTH))}
+    
+    from string import ascii_uppercase
+
+
+def wl_map_to_wells_384w(wl_map, flip=False, padding = 4):
+    from string import ascii_uppercase
+    WIDTH = 30
+    grid = []
+    for i in range(16):
+        row = []
+        for j in range(24):
+            row.append(ascii_uppercase[i] + str(j))
+        grid.append(row)
+    grid
+    return {name: np.flip(wl_map[:, i + padding : i+WIDTH - padding - 1, j + padding:j + WIDTH - padding], axis=1) if flip else wl_map[:, i + padding : i+WIDTH - padding - 1, j + padding:j+WIDTH - padding] 
+            for names, i in zip(grid, range(0, 480, WIDTH)) for name, j in zip(names, range(0, 720, WIDTH))}
