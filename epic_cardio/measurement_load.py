@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import re
-    
+from string import ascii_uppercase
     
 def load_measurement(dir_path):
     '''
@@ -141,3 +141,78 @@ def load_measurement_bt(dir_path):
         time = pd.read_table(dir_path + '/test_avg', skiprows=1, decimal=',')
         time = np.asarray(time.iloc[:,0]) * 60
     return WL_map, time
+
+def load_measurement_384w(dir_path):
+    '''
+        Load the well image from a project folder created by the Epic Cardio. 
+        Required folders/files are the DMR folder, the test_WL_Power and the
+        test_avg file.
+        
+        Parameters
+        ----------
+        dir_path: the path to the folder
+    '''
+    S = 0.0002
+    files = [ obj for obj in os.listdir(dir_path) if 'wl_power' in obj.lower()]
+    
+    if len(files) == 0:
+        print("Missing test wl power file!!!")
+        return None
+    
+    wl_power_path = os.path.join(dir_path, files[0])
+    
+    files = [ obj for obj in os.listdir(dir_path) if '_avg' in obj.lower()]
+    
+    avg_path = None
+    if len(files) > 0:
+        os.path.join(dir_path, files[0])
+    else:
+        print("Missing test avg!!!")
+    
+    fr = open( wl_power_path, "rb")
+    init_map = np.frombuffer(fr.read(), dtype=np.float32)
+    init_wl_map = np.reshape(init_map[:345600], [480, 720])
+    fr.close()
+
+    sorted_files = os.listdir(os.path.join(dir_path, 'DMR'))
+    sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
+
+    timestep_mats = np.zeros([len(sorted_files),480,720])
+    for i in range(len(sorted_files)):
+        step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
+        A_int = np.frombuffer(step.read(), dtype=np.uint16)
+        timestep_mats[i,:,:] = np.reshape(A_int,[480,720])
+        step.close()
+
+    WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
+
+    if avg_path != None:
+        time = []
+        time = pd.read_table(avg_path, skiprows=1, decimal=',')
+        time = np.asarray(time.iloc[:,0]) * 60
+    else:
+        time = np.array(list(range(0, WL_map.shape[0])))
+    print(f"Measurement loaded {WL_map.shape} time {time.shape}")
+    return WL_map, time
+
+def wl_map_to_wells(wl_map, flip=False):
+    WIDTH = 80
+    WELL_IDS = [['C1', 'C2', 'C3', 'C4'], ['B1', 'B2', 'B3', 'B4'], ['A1', 'A2', 'A3', 'A4']]
+    return {name: np.flip(wl_map[:, i : i+WIDTH, j:j+WIDTH], axis=1) if flip else wl_map[:, i : i+WIDTH, j:j+WIDTH] 
+            for names, i in zip(WELL_IDS, range(0, 240, WIDTH)) for name, j in zip(names, range(0, 320, WIDTH))}
+    
+    from string import ascii_uppercase
+
+
+def wl_map_to_wells_384w(wl_map, flip=False, padding = 4):
+    from string import ascii_uppercase
+    WIDTH = 30
+    grid = []
+    for i in range(16):
+        row = []
+        for j in range(24):
+            row.append(ascii_uppercase[i] + str(j))
+        grid.append(row)
+    grid
+    return {name: np.flip(wl_map[:, i + padding : i+WIDTH - padding - 1, j + padding:j + WIDTH - padding], axis=1) if flip else wl_map[:, i + padding : i+WIDTH - padding - 1, j + padding:j+WIDTH - padding] 
+            for names, i in zip(grid, range(0, 480, WIDTH)) for name, j in zip(names, range(0, 720, WIDTH))}
