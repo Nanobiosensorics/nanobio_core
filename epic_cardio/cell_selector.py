@@ -181,11 +181,13 @@ class WellArrayLineSelector:
     # A jelek közötti navigáció lehetségesa billentyűzeten a balra, jobbra nyilakkal és
     # a mentés az ENTER billentyűvel
     _ids = [ 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
-    def __init__(self, wells_data, block=True):
+    def __init__(self, wells_data, times, phases, block=True):
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
         self._well_id = 0
         self._wells_data = wells_data
+        self._times = times
+        self._phases = phases
         
         self.texts = []
         
@@ -193,7 +195,7 @@ class WellArrayLineSelector:
 
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
         self._im = self._ax1.imshow(self._well) # , vmin = np.min(self._well), vmax = np.max(self._well)
-        self._elm, = self._ax2.plot(np.linspace(0, self._lines_arr.shape[1], self._lines_arr.shape[1]) * 12, self._lines_arr[0, :])
+        self._elm, = self._ax2.plot(self._times, self._lines_arr[0, :])
         self._dots, = self._ax1.plot(self._pts_arr[0, 0], self._pts_arr[0, 1] , 'ro', markersize=5)
         self._selected, = self._ax1.plot(self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0] , 'go', markersize=5)
         self._ax1.set_xlabel('Pixel')
@@ -214,6 +216,11 @@ class WellArrayLineSelector:
             self._well = get_max_well(self._wells_data[self._ids[self._well_id]][0])
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
             self._lines_arr = np.asarray(self._wells_data[self._ids[self._well_id]][2])
+            
+            if len(self._phases) > 1:
+                for p in self._phases[1:]:
+                    self._lines_arr[:, p] = np.nan
+            
             self._i = 1
             if hasattr(self, '_im'):
                 self._im.set_data(self._well)
@@ -223,14 +230,14 @@ class WellArrayLineSelector:
                 self.texts.clear()
 
     def draw_plot(self, cell_id):
-        self._elm.set_data((np.linspace(0, self._lines_arr.shape[1], self._lines_arr.shape[1]) * 12, self._lines_arr[cell_id, :]))
+        self._elm.set_data(self._times, self._lines_arr[cell_id, :])
         self._ax1.set_title(self._ids[self._well_id])
         self._ax2.set_title(f'Record: {cell_id + 1}/{self._lines_arr.shape[0]}')
         # self._im.set_data(self._well[np.argmax(self._lines_arr[cell_id, :]), :, :])
         self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
         self._selected.set_data((self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 1]))
         # self._ax2.set_ylim((np.min(self._lines_arr), np.max(self._lines_arr)))
-        self._ax2.set_ylim((-100, np.max(self._lines_arr)))
+        self._ax2.set_ylim((-100, np.nanmax(self._lines_arr)))
         self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
