@@ -188,7 +188,6 @@ class WellArrayLineSelector:
         self._wells_data = wells_data
         self._times = times
         self._phases = phases
-        
         self.texts = []
         
         self.change_well()
@@ -215,7 +214,7 @@ class WellArrayLineSelector:
                 self._well_id += 1
             self._well = get_max_well(self._wells_data[self._ids[self._well_id]][0])
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
-            self._lines_arr = np.asarray(self._wells_data[self._ids[self._well_id]][2])
+            self._lines_arr = np.asarray(self._wells_data[self._ids[self._well_id]][2]).copy()
             
             if len(self._phases) > 1:
                 for p in self._phases[1:]:
