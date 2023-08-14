@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import os
 from scipy.spatial.distance import euclidean
+import json
 
 
 class CardioMicScaling:
@@ -11,17 +12,26 @@ class CardioMicScaling:
     MIC_20X = 2134 * 1.81
 
 class CardioMicFitter:
-    def __init__(self, well, mic, result_path, scaling=CardioMicScaling.MIC_5X, block=True):
+    def __init__(self, well, mic, result_path, scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None):
         self.closed = False
         self.tuned = False
+        self.save_params = save_params
         self.cardio_points = [False, np.zeros((2,2))]
         self.mic_points = [False, np.zeros((2,2))]
         self._well_id = 0
-        self.translation = np.array([1420, 955])
         self.distance = 100
         self.result_path = result_path
+        self.translation = np.array([1420, 955])
         self.scale = self._get_scale(scaling)
-        img = well[-1].copy()
+        
+        if load_params != None:
+            if os.path.exists(load_params) and load_params.endswith("json"):
+                with open(load_params, "r") as fp:
+                    obj = json.load(fp)
+                    self.scale = obj["scale"]
+                    self.translation = np.array([obj["t_0"], obj["t_1"]])
+        
+        img = well.copy()
         img[img < 0] = 0
         self.max_well = img
         self._mic, self._well = mic, cv2.resize(self.max_well, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
@@ -29,7 +39,7 @@ class CardioMicFitter:
         self._fig, self._ax = plt.subplots(figsize=(16, 8))
         self._ax.set_axis_off()
         self._im = self._ax.imshow(self._mic, cmap='gray') # , vmin = np.min(self._well), vmax = np.max(self._well)
-        self._elm = self._ax.imshow(self._well, alpha=.6,
+        self._elm = self._ax.imshow(self._well, alpha=.4,
                     extent = [self.translation[0], self.translation[0]  + self._well.shape[0],
                                                self.translation[1] + self._well.shape[1], self.translation[1]],)
         self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
@@ -65,6 +75,19 @@ class CardioMicFitter:
     def enter_pressed(self):
         self._ax.set_title(None)
         self._fig.savefig(os.path.join(self.result_path, 'well_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
+        if self.save_params:
+            obj = {
+                "scale": self.scale,
+                "t_0": int(self.translation[0]),
+                "t_1": int(self.translation[1]),
+            }
+            save_path = os.path.join(self.result_path, "metadata")
+            
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            with open(os.path.join(save_path, "well_map_params.json"), "w") as fp:
+                json.dump(obj, fp)
+        
         plt.close(self._fig)
         self.closed = True
         
@@ -127,9 +150,18 @@ class CardioMicFitter:
                         self.pts2.set_ydata(self.mic_points[1][:,1])
                         self._fig.canvas.draw()
             elif evt.key == 't':
-                self.scale *= euclidean(self.mic_points[1][0], self.mic_points[1][1]) / euclidean(self.cardio_points[1][0], self.cardio_points[1][1])
+                sc = euclidean(self.mic_points[1][0], self.mic_points[1][1]) / euclidean(self.cardio_points[1][0], self.cardio_points[1][1])
+                self.scale *= sc
                 self.scale = int(self.scale)
                 self._well = cv2.resize(self.max_well, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
+                dist = (self.mic_points[1][0] - sc * self.cardio_points[1][0])
+                self.translation[0] += dist[0]
+                self.translation[1] += dist[1]
+                self.tuned = True
+                self.pts1.remove()
+                self.pts2.remove()
+                self.draw_plot()
+            elif evt.key == 'r':
                 self.tuned = True
                 self.pts1.remove()
                 self.pts2.remove()
@@ -140,11 +172,12 @@ class CardioMicFitter:
         
 class CardioMicFitterMultipleWell(CardioMicFitter):
     _ids = [ 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
-    def __init__(self, wells_data, mics_data, result_path, scaling=CardioMicScaling.MIC_5X, block=True):
+    def __init__(self, wells_data, mics_data, result_path, scaling=CardioMicScaling.MIC_5X, block=True, retune=False):
         self._well_id = 0
         self._wells_data = wells_data
         self._mics_data = mics_data
         self.translations = []
+        self.retune = retune
         
         super().__init__(self._wells_data[self._ids[self._well_id]], self._mics_data[self._ids[self._well_id]], 
                          result_path, scaling=scaling, block=block)
@@ -154,7 +187,7 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
             plt.close(self._fig)
             self.closed = True
         else:        
-            img = self._wells_data[self._ids[self._well_id]][-1].copy()
+            img = self._wells_data[self._ids[self._well_id]].copy()
             img[img < 0] = 0
             self._well = cv2.resize(img, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
             self._mic = self._mics_data[self._ids[self._well_id]]
@@ -175,6 +208,10 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
     def next_pressed(self):
         self._well_id += 1
         if not self.check_close():
+            if self.retune:
+                self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
+                self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
+                self.tuned = False
             self.plot_well()
             self.draw_plot() 
             
@@ -185,4 +222,9 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
         self._well_id += 1
         
         if not self.check_close():
+            if self.retune:
+                self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
+                self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
+                self.tuned = False
             self.plot_well()
+            self.draw_plot() 
