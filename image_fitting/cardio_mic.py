@@ -12,7 +12,8 @@ class CardioMicScaling:
     MIC_20X = 2134 * 1.81
 
 class CardioMicFitter:
-    def __init__(self, well, mic, result_path, scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None):
+    def __init__(self, well, mic, result_path, scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None):
+        self.name = name
         self.closed = False
         self.tuned = False
         self.save_params = save_params
@@ -74,18 +75,18 @@ class CardioMicFitter:
             
     def enter_pressed(self):
         self._ax.set_title(None)
-        self._fig.savefig(os.path.join(self.result_path, 'well_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
+        self._fig.savefig(os.path.join(self.result_path, f'{"well" if self.name == None else self.name}_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
         if self.save_params:
             obj = {
                 "scale": self.scale,
-                "t_0": int(self.translation[0]),
-                "t_1": int(self.translation[1]),
+                "t_0": self.translation[0],
+                "t_1": self.translation[1],
             }
             save_path = os.path.join(self.result_path, "metadata")
             
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
-            with open(os.path.join(save_path, "well_map_params.json"), "w") as fp:
+            with open(os.path.join(save_path, f'{"well" if self.name == None else self.name}_map_params.json')) as fp:
                 json.dump(obj, fp)
         
         plt.close(self._fig)
