@@ -51,7 +51,7 @@ class CardioMicFitter:
         self.draw_plot()
         plt.show(block=block)
     
-    @classmethod
+    @staticmethod
     def _get_scale(scale):
         MIC_PX_PER_UM = scale / 1000
         EPIC_PX_PER_UM = 1/25
