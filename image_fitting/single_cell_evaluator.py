@@ -7,6 +7,7 @@ from ..epic_cardio.math_ops import get_max_well
 from datetime import datetime
 import os
 import pandas as pd
+import json
 
 class SingleCellDisplayContour:
     CELL = 0,
@@ -16,23 +17,43 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
     
-    def __init__(self, well, im_mic, im_mask, scale, translation, px_size, 
+    def __init__(self, well, im_mic, im_mask, params, 
                  display_contours: list = [
                     SingleCellDisplayContour.ALL,   
-                 ]):
+                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz'):
         self.disp = display_contours
         self.idx = 0
         self.well = well
-        self.translation = translation
-        self.scale = scale
+        self.save_path = save_path
+        self.selected_coords = []
+        
+        if type(params) == dict:
+            self.translation = params['translation']
+            self.scale = params['scale']
+            self.px_size = params['px_size']
+        elif os.path.exists(params):
+            with open(params, 'r') as fp:
+                p = json.load(fp)
+                self.translation = np.array([p['t_0'], p['t_1']])
+                self.scale = p['scale']
+                self.px_size = self.scale / 80 / 25
+        else:
+            raise ValueError('Wrong value given for params')
+        
+        self.save_selection = save_selection
+        
+        if load_selection != None:
+            if os.path.exists(load_selection):
+                with open(load_selection, 'r') as fp:
+                    self.selected_coords = json.load(load_selection)
         
         # Image slicing
 
         im_pxs = np.asarray([[ n + m * 80 for n in range(0, 80)] for m in range(0, 80) ])
-        im_pxs = cv2.resize(im_pxs, (scale, scale), interpolation=cv2.INTER_NEAREST)
-        im_cardio = cv2.resize(get_max_well(well), (scale, scale), interpolation=cv2.INTER_NEAREST)
+        im_pxs = cv2.resize(im_pxs, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
+        im_cardio = cv2.resize(get_max_well(well), (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
         
-        cardio_slice, mic_slice = CardioMicSingleCellEvaluator._get_slicer(im_mask.shape, (scale, scale), translation)
+        cardio_slice, mic_slice = CardioMicSingleCellEvaluator._get_slicer(im_mask.shape, (self.scale, self.scale), self.translation)
 
         im_markers = im_mask[mic_slice]
         im_mic = im_mic[mic_slice]
@@ -47,7 +68,7 @@ class CardioMicSingleCellEvaluator():
             'adjacent': False,
         }
         
-        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, translation, (scale, scale), px_size)
+        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
         
         self.markers = markers
         
@@ -57,9 +78,6 @@ class CardioMicSingleCellEvaluator():
         self.im_contour = get_contour(im_contour, 1)
         
         self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
-        
-        self.px_size = px_size
-        self.selected_coords = []
     
     @classmethod
     def _get_slicer(self, shape, scale, translation):
@@ -162,6 +180,9 @@ class CardioMicSingleCellEvaluator():
             self.im_pxs_tr, self.im_contour_tr, self.centers_tr = CardioMicSingleCellEvaluator._transform_resolution(self.im_cardio, \
                 self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers, self.im_cardio.shape, resolution)
             
+        self.im_cardio_disp = self.im_cardio_tr.copy()
+        self.im_cardio_disp[self.im_cardio_disp < 0] = 0
+            
         # Display
         
         self.fig, self.ax = plt.subplots(2, 2, figsize=(16, 12))
@@ -177,13 +198,9 @@ class CardioMicSingleCellEvaluator():
         self.ax_cell.set_position([0, 0.025, .45, .45])
 
         self.ax_mic.imshow(self.im_mic_tr)
-        self.ax_mic.imshow(self.im_cardio_tr, alpha=.4, 
-                        vmin = np.mean(self.im_cardio_tr) - 3*np.std(self.im_cardio_tr), 
-                        vmax = np.mean(self.im_cardio_tr) + 3*np.std(self.im_cardio_tr))
+        self.ax_mic.imshow(self.im_cardio_disp, alpha=.4)
         self.ax_cell.imshow(self.im_mic_tr)
-        self.ax_cell.imshow(self.im_cardio_tr, alpha=.4, 
-                        vmin = np.mean(self.im_cardio_tr) - 3*np.std(self.im_cardio_tr), 
-                        vmax = np.mean(self.im_cardio_tr) + 3*np.std(self.im_cardio_tr))
+        self.ax_cell.imshow(self.im_cardio_disp, alpha=.4)
         self.ax_max.set_ylim((-.05, 2500))
         self.ax_int.set_ylim((np.min(self.well), np.max(self.well)))
         self.ax_mic.set_title('Cells')
@@ -208,7 +225,7 @@ class CardioMicSingleCellEvaluator():
         self.crnt_pt.set_data(((x_center),(y_center)))
 
     def draw_plot(self):
-        self.ax_cell.patches = []
+        # self.ax_cell.patches = []
         self.ax_cell.set_title(f'Cell {self.idx + 1}/{len(self.markers)}, Area {np.round(get_area_by_cell_id(self.markers[self.idx], self.im_markers_tr, self.px_size), 2)} μm²')
         self.change_ax_limit(self.centers_tr[self.idx, 0], self.centers_tr[self.idx, 1])
         if SingleCellDisplayContour.CELL in self.disp or SingleCellDisplayContour.ALL in self.disp:

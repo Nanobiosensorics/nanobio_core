@@ -23,7 +23,7 @@ class CardioMicFitter:
         self.distance = 100
         self.result_path = result_path
         self.translation = np.array([1420, 955])
-        self.scale = self._get_scale(scaling)
+        self.scale, _ = CardioMicFitter._get_scale(scaling)
         
         if load_params != None:
             if os.path.exists(load_params) and load_params.endswith("json"):
@@ -50,14 +50,15 @@ class CardioMicFitter:
         self.make_title()
         self.draw_plot()
         plt.show(block=block)
-        
-    def _get_scale(self, scaling):
-        MIC_PX_PER_UM = scaling / 1000
+    
+    @classmethod
+    def _get_scale(scale):
+        MIC_PX_PER_UM = scale / 1000
         EPIC_PX_PER_UM = 1/25
         EPIC_CARDIO_SCALE = int(80 * (MIC_PX_PER_UM / EPIC_PX_PER_UM))
         MIC_UM_PER_PX = 1 / MIC_PX_PER_UM
         MIC_PX_AREA = MIC_UM_PER_PX**2
-        return EPIC_CARDIO_SCALE
+        return EPIC_CARDIO_SCALE, MIC_UM_PER_PX
 
     def draw_plot(self):
         self._elm.set_extent([self.translation[0], self.translation[0]  + self._well.shape[0],
