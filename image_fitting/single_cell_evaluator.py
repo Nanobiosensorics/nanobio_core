@@ -42,11 +42,6 @@ class CardioMicSingleCellEvaluator():
         
         self.save_selection = save_selection
         
-        if load_selection != None:
-            if os.path.exists(load_selection):
-                with open(load_selection, 'r') as fp:
-                    self.selected_coords = json.load(load_selection)
-        
         # Image slicing
 
         im_pxs = np.asarray([[ n + m * 80 for n in range(0, 80)] for m in range(0, 80) ])
@@ -72,12 +67,22 @@ class CardioMicSingleCellEvaluator():
         
         self.markers = markers
         
-        
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         self.im_contour = get_contour(im_contour, 1)
         
         self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
+        
+        if load_selection != None:
+            if os.path.exists(load_selection):
+                with open(load_selection, 'r') as fp:
+                    selection = json.load(fp)['ids']
+                    for sel in selection:
+                        for i, marker in enumerate(markers):
+                            if sel == marker:
+                                self.selected_coords.append(i)
+                        
+        
     
     @classmethod
     def _get_slicer(self, shape, scale, translation):
@@ -225,7 +230,8 @@ class CardioMicSingleCellEvaluator():
         self.crnt_pt.set_data(((x_center),(y_center)))
 
     def draw_plot(self):
-        # self.ax_cell.patches = []
+        for p in self.ax_cell.patches:
+            p.remove()
         self.ax_cell.set_title(f'Cell {self.idx + 1}/{len(self.markers)}, Area {np.round(get_area_by_cell_id(self.markers[self.idx], self.im_markers_tr, self.px_size), 2)} μm²')
         self.change_ax_limit(self.centers_tr[self.idx, 0], self.centers_tr[self.idx, 1])
         if SingleCellDisplayContour.CELL in self.disp or SingleCellDisplayContour.ALL in self.disp:
@@ -265,6 +271,7 @@ class CardioMicSingleCellEvaluator():
         
     def on_button_save_clicked(self, b):
         if self.idx not in self.selected_coords:
+            print(self.idx, self.centers[self.idx], self.markers[self.idx])
             self.selected_coords.append(self.idx)
         self.on_button_plus_clicked(b)
 
@@ -299,6 +306,9 @@ class CardioMicSingleCellEvaluator():
             cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range))
             cell_cardio = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range))
             now = datetime.now()
+            
+            selection = []
+            
             for i, selected_id in enumerate(sorted(self.selected_coords)):
                 print(f'Progress {i + 1}/{len(self.selected_coords)}', end='\r')
                 cell_id = self.markers[selected_id]
@@ -330,6 +340,8 @@ class CardioMicSingleCellEvaluator():
                 cell_markers_singular[i] = cell_markers[i] == cell_id
                 cell_cardio[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
                 
+                selection.append(int(cell_id))
+                
                 # cell mic image, cardio video, coordinates
             print(f'Duration {datetime.now() - now}')
             pd.DataFrame(max_signals).to_csv(os.path.join(path, 'max_signals.csv'))
@@ -338,3 +350,5 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, 'mic_centers.csv'))
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, 'cardio_centers.csv'))
             np.savez(os.path.join(path, 'segmentation.npz'), cardio=cell_cardio, mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
+            with open(os.path.join(path, 'selection.json'), 'w') as fp:
+                json.dump({'ids': selection}, fp)
