@@ -8,11 +8,14 @@ from datetime import datetime
 import os
 import pandas as pd
 import json
+from skimage.segmentation import watershed
+from scipy import ndimage as ndi
 
 class SingleCellDisplayContour:
-    CELL = 0,
-    MAX = 1,
-    COVER = 2,
+    CELL = 0
+    MAX = 1
+    COVER = 2
+    WATERSHED = 3
     ALL = 255
 
 class CardioMicSingleCellEvaluator():
@@ -20,7 +23,7 @@ class CardioMicSingleCellEvaluator():
     def __init__(self, well, im_mic, im_mask, params,
                  display_contours: list = [
                     SingleCellDisplayContour.ALL,
-                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz'):
+                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz', ws_threshold = 160):
         self.disp = display_contours
         self.idx = 0
         self.well = well
@@ -59,19 +62,32 @@ class CardioMicSingleCellEvaluator():
 
         filter_params = {
             'area': (-np.Inf, np.Inf),
-            'max_value': (50, np.Inf),
+            'max_value': (100, np.Inf),
             'adjacent': False,
         }
 
         markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
 
         self.markers = markers
+        
+        cardio_centers = CardioMicSingleCellEvaluator._get_cardio_centers(centers, im_pxs)
+        
+        crd = well[-1].copy()
+        crd[crd < 0] = 0
+        bn = np.zeros(crd.shape)
+        bn[crd > ws_threshold] = 1
+        mask = np.zeros(crd.shape, dtype=int)
+        for i in range(cardio_centers.shape[1]):
+            mask[cardio_centers[0, i], cardio_centers[1, i]] = markers[i]
+        im_watershed = watershed(-crd, mask, mask=bn)
+        im_watershed *= bn.astype(int)
+        im_watershed = cv2.resize(im_watershed, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
 
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         self.im_contour = get_contour(im_contour, 1)
 
-        self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
+        self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers, self.im_watershed = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers, im_watershed
 
         if load_selection != None:
             if os.path.exists(load_selection):
@@ -82,7 +98,15 @@ class CardioMicSingleCellEvaluator():
                             if sel == marker:
                                 self.selected_coords.append(i)
 
-
+    @classmethod
+    def _get_cardio_centers(self, centers, im_pxs):
+        cntrs= []
+        for cnt in centers:
+            px_center = im_pxs[int(cnt[1]), int(cnt[0])]
+            cntrs.append((px_center % 80, px_center // 80))
+        cntrs = np.array(cntrs).T
+        cntrs = np.flip(cntrs, axis=0)
+        return cntrs
 
     @classmethod
     def _get_slicer(self, shape, scale, translation):
@@ -97,7 +121,7 @@ class CardioMicSingleCellEvaluator():
         return cardio_slice, mic_slice
 
     @classmethod
-    def _transform_resolution(self, im_cardio, im_mic, im_markers, im_pxs, im_contour, centers, shape, resolution = 1):
+    def _transform_resolution(self, im_cardio, im_mic, im_markers, im_pxs, im_contour, im_watershed, centers, shape, resolution = 1):
         if resolution == 1:
             return im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
 
@@ -121,6 +145,9 @@ class CardioMicSingleCellEvaluator():
         im_contour_tr = cv2.resize(im_contour,
                             (round(shape[1] * resolution), round(shape[0] * resolution)),
                             interpolation=cv2.INTER_NEAREST)
+        im_watershed_tr = cv2.resize(im_watershed,
+                        (round(shape[1] * resolution), round(shape[0] * resolution)),
+                        interpolation=cv2.INTER_NEAREST)
 
         centers_tr = []
         for coord in centers:
@@ -128,7 +155,7 @@ class CardioMicSingleCellEvaluator():
                 (coord[0] / (shape[0]) * (shape[0] * resolution),
                 coord[1] / (shape[1]) * (shape[1] * resolution)))
         centers_tr = np.asarray(centers_tr)
-        return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, centers_tr
+        return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, im_watershed_tr, centers_tr
 
     @classmethod
     def _cell_filtering(self, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
@@ -182,8 +209,8 @@ class CardioMicSingleCellEvaluator():
         self.scaled_px_range = int(self.scale / 80 * px_range)
 
         self.im_cardio_tr, self.im_mic_tr, self.im_markers_tr, \
-            self.im_pxs_tr, self.im_contour_tr, self.centers_tr = CardioMicSingleCellEvaluator._transform_resolution(self.im_cardio, \
-                self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers, self.im_cardio.shape, resolution)
+            self.im_pxs_tr, self.im_contour_tr, self.im_watershed_tr, self.centers_tr = CardioMicSingleCellEvaluator._transform_resolution(self.im_cardio, \
+                self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.im_watershed, self.centers, self.im_cardio.shape, resolution)
 
         self.im_cardio_disp = self.im_cardio_tr.copy()
         self.im_cardio_disp[self.im_cardio_disp < 0] = 0
@@ -242,6 +269,11 @@ class CardioMicSingleCellEvaluator():
             cont = get_cover_px_contour(self.markers[self.idx], self.im_cardio_tr,
                                     self.im_markers_tr, self.im_pxs_tr)
             self.ax_cell.add_patch(cont)
+        if SingleCellDisplayContour.WATERSHED in self.disp or SingleCellDisplayContour.ALL in self.disp:
+            cont = get_watershed_px_contour(self.markers[self.idx], self.im_cardio_tr,
+                                    self.im_markers_tr, self.im_watershed_tr)
+            if cont != None:
+                self.ax_cell.add_patch(cont)
         if SingleCellDisplayContour.MAX in self.disp or SingleCellDisplayContour.ALL in self.disp:
             cont = get_max_px_contour(self.markers[self.idx], self.im_cardio_tr,
                                     self.im_markers_tr, self.im_pxs_tr)

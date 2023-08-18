@@ -83,6 +83,18 @@ def get_cover_px_contour(cell_id, im_out, im_markers, im_pxs):
     del contour_cell, shape
     return p
 
+def get_watershed_px_contour(cell_id, im_out, im_markers, im_watershed):
+    contour_cell = im_watershed.copy()
+    contour_cell[im_watershed != cell_id] = 0
+    
+    if np.sum(contour_cell) == 0:
+        return None
+    
+    shape = get_contour_points(contour_cell.astype('uint8'))
+    p = Polygon(shape, edgecolor='y', closed=True, fill=None, lw=3)
+    del contour_cell, shape
+    return p
+
 def is_adjacent(cell_id, im_markers, im_pxs):
     contour_cell = im_pxs.copy()
     contour_cell[im_markers != cell_id] = 0
