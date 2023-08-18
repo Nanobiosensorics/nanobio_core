@@ -412,5 +412,10 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, f'{well_id}_cardio_centers.csv'))
             np.savez(os.path.join(path, f'{well_id}_seg.npz'), cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
                      mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
-            with open(os.path.join(path, f'{well_id}_selection.json'), 'w') as fp:
+            
+            sel_path = os.path.join(path, '.metadata')
+            if not os.path.exists(sel_path):
+                os.makedirs(sel_path)
+            
+            with open(os.path.join(sel_path, f'{well_id}_selection.json'), 'w') as fp:
                 json.dump({'ids': selection}, fp)
