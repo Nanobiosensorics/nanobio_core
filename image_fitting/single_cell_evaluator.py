@@ -23,7 +23,12 @@ class CardioMicSingleCellEvaluator():
     def __init__(self, well, im_mic, im_mask, params,
                  display_contours: list = [
                     SingleCellDisplayContour.ALL,
-                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz', ws_threshold = 160):
+                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
+                 filter_params = {
+                    'area': (-np.Inf, np.Inf),
+                    'max_value': (100, np.Inf),
+                    'adjacent': True,
+                }):
         self.disp = display_contours
         self.idx = 0
         self.well = well
@@ -59,12 +64,6 @@ class CardioMicSingleCellEvaluator():
         im_pxs = im_pxs[cardio_slice]
 
         # Image filtering
-
-        filter_params = {
-            'area': (-np.Inf, np.Inf),
-            'max_value': (100, np.Inf),
-            'adjacent': True,
-        }
 
         markers, centers = CardioMicSingleCellEvaluator._single_cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
 
@@ -171,23 +170,17 @@ class CardioMicSingleCellEvaluator():
         markers_filter = im_markers_sliced.copy().astype(int)
         unique_cell = np.unique(markers_filter)
         markers_selected = []
-        markers_excluded = []
         for n, i in enumerate(unique_cell):
             print(f'Single cell based filtering: {n + 1}/{len(unique_cell)}', end='\r' if n + 1 != len(unique_cell) else '\n')
             y, x = (im_markers == i).nonzero()
             if np.any(y <= translation[1]) or np.any(y >= translation[1] + shape[1]):
-                markers_excluded.append(i)
                 continue
             if np.any(x <= translation[0]) or np.any(x >= translation[0] + shape[0]):
-                markers_excluded.append(i)
                 continue
             ar = get_area_by_cell_id(i, im_markers, px_size)
             mx = np.max(get_max_px_signal_by_cell_id(i, well, im_cardio_sliced, im_markers_sliced, im_pxs_sliced))
             if (ar > filter_params['area'][0]) & (ar < filter_params['area'][1]) & (mx > filter_params['max_value'][0]) & (mx < filter_params['max_value'][1]):
                 markers_selected.append(i)
-                continue
-            else:
-                markers_excluded.append(i)
                 
         print(f'Duration {datetime.now() - now}')
         print(f'Cell centers calculation')
@@ -313,6 +306,9 @@ class CardioMicSingleCellEvaluator():
     #     elm6.set_data((np.linspace(0, self.well.shape[0], self.well.shape[0]), sig))
     #     ax[2, 1].set_ylim((np.min(sig), np.max(sig)))
         self.fig.canvas.draw()
+        
+    def select_all(self):
+        self.selected_coords = list(range(len(self.markers)))
 
     def on_button_plus_clicked(self, b):
         self.idx = min(self.idx + 1, len(self.markers) - 1)
@@ -324,7 +320,7 @@ class CardioMicSingleCellEvaluator():
 
     def on_button_save_clicked(self, b):
         if self.idx not in self.selected_coords:
-            print(self.idx, self.centers[self.idx], self.markers[self.idx])
+            # print(self.idx, self.centers[self.idx], self.markers[self.idx])
             self.selected_coords.append(self.idx)
         self.on_button_plus_clicked(b)
 
@@ -380,27 +376,30 @@ class CardioMicSingleCellEvaluator():
                 ranges = ((max(cell_center[1] - slaced_px_range, 0), min(cell_center[1] + slaced_px_range, self.im_mic.shape[0])),
                           (max(cell_center[0] - slaced_px_range, 0), min(cell_center[0] + slaced_px_range, self.im_mic.shape[1])))
                 mic_slice = (slice(*ranges[0]), slice(*ranges[1]))
+                mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
                 ranges = ((max(cardio_center[1] - px_range, 0), min(cardio_center[1] + px_range, self.well.shape[1])),
                           (max(cardio_center[0] - px_range, 0), min(cardio_center[0] + px_range, self.well.shape[2])))
                 cardio_slice = (slice(*ranges[0]), slice(*ranges[1]))
+                cardio_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
-                cell_markers[i] = self.im_markers[mic_slice[0], mic_slice[1]]
+                cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
+                cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
                 cell_mics_singular[i] = cell_mics[i].copy()
                 cell_mics_singular[i][cell_markers[i] != cell_id] = 0
                 cell_markers_singular[i] = cell_markers[i] == cell_id
-                cell_cardio[i] = self.well[:, cardio_slice[0], cardio_slice[1]]
+                cell_cardio[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
                 
                 cover_im = get_cover_px_well_by_cell_id(cell_id, self.well, self.im_markers, self.im_pxs)
                 cover_im = cover_im[:, cardio_slice[0], cardio_slice[1]]
-                cell_cover[i] = cover_im
+                cell_cover[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = cover_im
                 
                 ws_im = self.well.copy()
                 ws_im[:, self.cardio_watershed != cell_id] = 0
                 ws_im = ws_im[:, cardio_slice[0], cardio_slice[1]]
                 if np.sum(ws_im) == 0:
                     ws_im = cover_im.copy()
-                cell_watershed[i] = ws_im
+                cell_watershed[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = ws_im
 
                 selection.append(int(cell_id))
 
