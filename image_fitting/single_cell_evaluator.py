@@ -67,8 +67,6 @@ class CardioMicSingleCellEvaluator():
         }
 
         markers, centers = CardioMicSingleCellEvaluator._single_cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
-        
-        print(markers)
 
         cardio_centers = CardioMicSingleCellEvaluator._get_cardio_centers(centers, im_pxs)
         crd = well[-1].copy()
@@ -83,8 +81,6 @@ class CardioMicSingleCellEvaluator():
         # self.cardio_watershed = im_watershed.copy()
         
         markers, centers = CardioMicSingleCellEvaluator._adjacent_filtering(filter_params, markers, im_markers, im_pxs)
-        
-        print(markers)
         
         self.cardio_watershed = np.zeros(im_watershed.shape)
         for marker in markers:
