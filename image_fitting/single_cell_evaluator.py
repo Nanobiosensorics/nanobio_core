@@ -63,15 +63,14 @@ class CardioMicSingleCellEvaluator():
         filter_params = {
             'area': (-np.Inf, np.Inf),
             'max_value': (100, np.Inf),
-            'adjacent': False,
+            'adjacent': True,
         }
 
-        markers, centers = CardioMicSingleCellEvaluator._cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
+        markers, centers = CardioMicSingleCellEvaluator._single_cell_filtering(filter_params, well, im_cardio, im_mask, im_markers, im_pxs, self.translation, (self.scale, self.scale), self.px_size)
+        
+        print(markers)
 
-        self.markers = markers
-        
         cardio_centers = CardioMicSingleCellEvaluator._get_cardio_centers(centers, im_pxs)
-        
         crd = well[-1].copy()
         crd[crd < 0] = 0
         bn = np.zeros(crd.shape)
@@ -81,9 +80,20 @@ class CardioMicSingleCellEvaluator():
             mask[cardio_centers[0, i], cardio_centers[1, i]] = markers[i]
         im_watershed = watershed(-crd, mask, mask=bn)
         im_watershed *= bn.astype(int)
-        self.cardio_watershed = im_watershed.copy()
-        im_watershed = cv2.resize(im_watershed, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
-
+        # self.cardio_watershed = im_watershed.copy()
+        
+        markers, centers = CardioMicSingleCellEvaluator._adjacent_filtering(filter_params, markers, im_markers, im_pxs)
+        
+        print(markers)
+        
+        self.cardio_watershed = np.zeros(im_watershed.shape)
+        for marker in markers:
+            self.cardio_watershed[im_watershed == marker] = marker
+            
+        im_watershed = cv2.resize(self.cardio_watershed, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
+        
+        self.markers = markers
+        
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         self.im_contour = get_contour(im_contour, 1)
@@ -159,12 +169,12 @@ class CardioMicSingleCellEvaluator():
         return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, im_watershed_tr, centers_tr
 
     @classmethod
-    def _cell_filtering(self, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
+    def _single_cell_filtering(self, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
         now = datetime.now()
 
         markers_filter = im_markers_sliced.copy().astype(int)
         unique_cell = np.unique(markers_filter)
-        markers_selected_1 = []
+        markers_selected = []
         markers_excluded = []
         for n, i in enumerate(unique_cell):
             print(f'Single cell based filtering: {n + 1}/{len(unique_cell)}', end='\r' if n + 1 != len(unique_cell) else '\n')
@@ -178,22 +188,36 @@ class CardioMicSingleCellEvaluator():
             ar = get_area_by_cell_id(i, im_markers, px_size)
             mx = np.max(get_max_px_signal_by_cell_id(i, well, im_cardio_sliced, im_markers_sliced, im_pxs_sliced))
             if (ar > filter_params['area'][0]) & (ar < filter_params['area'][1]) & (mx > filter_params['max_value'][0]) & (mx < filter_params['max_value'][1]):
-                markers_selected_1.append(i)
+                markers_selected.append(i)
                 continue
             else:
                 markers_excluded.append(i)
+                
+        print(f'Duration {datetime.now() - now}')
+        print(f'Cell centers calculation')
+        now = datetime.now()
+        im_markers_selected = mask_centers(im_markers_sliced, markers_selected)
+        print(f'Duration {datetime.now() - now}')
+        return markers_selected, im_markers_selected
+    
+    @classmethod
+    def _adjacent_filtering(self, filter_params, markers_selected_sc, im_markers_sliced, im_pxs_sliced):
+        now = datetime.now()
+
+        markers_filter = im_markers_sliced.copy().astype(int)
 
         if filter_params['adjacent']:
             markers_selected = []
-            for n, i in enumerate(markers_selected_1):
-                print(f'Relational filtering: {n + 1}/{len(markers_selected_1)}', end='\r' if n + 1 != len(markers_selected_1) else '\n')
+            for n, i in enumerate(markers_selected_sc):
+                print(f'Relational filtering: {n + 1}/{len(markers_selected_sc)}', end='\r' if n + 1 != len(markers_selected_sc) else '\n')
                 ngh = is_adjacent(i, markers_filter, im_pxs_sliced)
-                ngh = set(ngh) - set(markers_excluded) - set([i])
+                ngh = set(ngh) - set([i])
                 if len(ngh) != 0:
+                    print(i)
                     continue
                 markers_selected.append(i)
         else:
-            markers_selected = markers_selected_1
+            markers_selected = markers_selected_sc
         print(f'Duration {datetime.now() - now}')
         print(f'Cell centers calculation')
         now = datetime.now()
