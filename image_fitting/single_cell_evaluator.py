@@ -340,7 +340,7 @@ class CardioMicSingleCellEvaluator():
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
             
-    def save(self, path, px_range = 3):
+    def save(self, path, well_id = 'well', px_range = 3):
         if len(self.selected_coords) > 0:
             slaced_px_range = int(self.scale / 80 * px_range)
             max_signals = np.zeros((len(self.selected_coords), self.well.shape[0]))
@@ -405,12 +405,12 @@ class CardioMicSingleCellEvaluator():
 
                 # cell mic image, cardio video, coordinates
             print(f'Duration {datetime.now() - now}')
-            pd.DataFrame(max_signals).to_csv(os.path.join(path, 'max_signals.csv'))
-            pd.DataFrame(cover_signals).to_csv(os.path.join(path, 'int_signals.csv'))
-            pd.DataFrame(cell_areas).to_csv(os.path.join(path, 'areas.csv'))
-            pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, 'mic_centers.csv'))
-            pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, 'cardio_centers.csv'))
-            np.savez(os.path.join(path, 'segmentation.npz'), cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
+            pd.DataFrame(max_signals).to_csv(os.path.join(path, f'{well_id}_max_signals.csv'))
+            pd.DataFrame(cover_signals).to_csv(os.path.join(path, f'{well_id}_int_signals.csv'))
+            pd.DataFrame(cell_areas).to_csv(os.path.join(path, f'{well_id}_areas.csv'))
+            pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, f'{well_id}_mic_centers.csv'))
+            pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, f'{well_id}_cardio_centers.csv'))
+            np.savez(os.path.join(path, f'{well_id}_seg.npz'), cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
                      mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
-            with open(os.path.join(path, 'selection.json'), 'w') as fp:
+            with open(os.path.join(path, f'{well_id}_selection.json'), 'w') as fp:
                 json.dump({'ids': selection}, fp)
