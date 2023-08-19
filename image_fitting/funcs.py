@@ -75,11 +75,26 @@ def get_max_px_contour(cell_id, im_out, im_markers, im_pxs):
     del contour_px
     return p
 
-def get_cover_px_contour(cell_id, im_out, im_markers, im_pxs):
+def get_cover_px(cell_id, im_markers, im_pxs):
     contour_cell = im_pxs.copy()
     contour_cell[im_markers != cell_id] = 0
+    return contour_cell
+
+def get_cover_px_contour(cell_id, im_out, im_markers, im_pxs):
+    contour_cell = get_cover_px(cell_id, im_markers, im_pxs)
     shape = get_contour_points(np.isin(im_pxs, np.unique(contour_cell)[1:]).astype('uint8'))
     p = Polygon(shape, edgecolor='b', closed=True, fill=None, lw=3)
+    del contour_cell, shape
+    return p
+
+def get_watershed_px_contour(cell_id, im_out, im_markers, im_watershed):
+    contour_cell = get_cover_px(cell_id, im_watershed, im_watershed)
+    
+    if np.sum(contour_cell) == 0:
+        return None
+    
+    shape = get_contour_points(contour_cell.astype('uint8'))
+    p = Polygon(shape, edgecolor='y', closed=True, fill=None, lw=3)
     del contour_cell, shape
     return p
 
@@ -97,6 +112,17 @@ def get_max_px_signal_by_cell_id(cell_id, im_src, im_out, im_markers, im_pxs):
     px = get_max_pixel_id(cell_id, im_out, im_markers, im_pxs)
     coord = get_coord_from_idx(px)
     return im_src[:, coord[0], coord[1]]
+
+def get_cover_px_well_by_cell_id(cell_id, im_src, im_markers, im_pxs):
+    contour_cell = im_pxs.copy()
+    contour_cell[im_markers != cell_id] = 0
+    idxs = np.unravel_index(np.unique(contour_cell)[1:], (80,80))
+    pxs = np.array([idxs[0], idxs[1]]).T
+    masked = np.zeros(im_src.shape)
+    for i in range(0, pxs.shape[0]):
+        masked[: ,pxs[i, 0], pxs[i, 1]] = im_src[: ,pxs[i, 0], pxs[i, 1]]
+    del contour_cell
+    return masked
 
 def get_cover_px_signal_by_cell_id(cell_id, im_src, im_out, im_markers, im_pxs):
     contour_cell = im_pxs.copy()
