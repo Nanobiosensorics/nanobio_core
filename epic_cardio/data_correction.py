@@ -1,6 +1,14 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
+def corr_data(data):
+    corr_data = data.copy()
+    for n in range(0, corr_data.shape[0]):
+        corr_data[n, :] -= corr_data[n, 1] - corr_data[n, 0]
+    for n in range(0, corr_data.shape[0]):
+        corr_data[n, :] -= corr_data[n, 0]
+    return corr_data
+
 def select_indices(bool_array, num_indices, spacing = 2, random_distance=5):
     # Get the indices of the true elements in the boolean array
     true_indices = np.argwhere(bool_array)
