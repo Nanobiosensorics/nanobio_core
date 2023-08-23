@@ -35,13 +35,12 @@ def select_indices(bool_array, num_indices, spacing = 2, random_distance=5):
             chosen_indices.append(random_true_index)
             
         n_attempts += 1
-    
     # Split the chosen indices into x and y groups
     x_indices, y_indices = zip(*chosen_indices)
     
     return x_indices, y_indices
 
-def correct_well(well, threshold = 50):
+def correct_well(well, threshold = 75):
     corr_data = well.copy()
     corr_data -= corr_data[0, :, :]
     

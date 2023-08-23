@@ -20,16 +20,13 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
 
-    def __init__(self, time, well, im_mic, im_mask, params,
-                 display_contours: list = [
-                    SingleCellDisplayContour.ALL,
-                 ], load_selection=None, save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
+    def __init__(self, time, well, im_mic, im_mask, params, load_selection=None, 
+                 save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
                  filter_params = {
                     'area': (-np.Inf, np.Inf),
                     'max_value': (100, np.Inf),
                     'adjacent': True,
                 }):
-        self.disp = display_contours
         self.idx = 0
         self.time = time
         self.well = well
@@ -217,8 +214,9 @@ class CardioMicSingleCellEvaluator():
         # print(f'Duration {datetime.now() - now}')
         return markers_selected, im_markers_selected
 
-    def display(self, resolution = 1, px_range = 5):
+    def display(self, resolution = 1, px_range = 5, display_contours=[SingleCellDisplayContour.ALL]):
 
+        self.disp = display_contours
         # Image transformation
 
         self.resolution = resolution
