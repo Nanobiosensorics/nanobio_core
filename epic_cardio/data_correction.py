@@ -1,5 +1,8 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('Qt5Agg')
 
 def corr_data(data):
     corr_data = data.copy()
@@ -9,8 +12,11 @@ def corr_data(data):
         corr_data[n, :] -= corr_data[n, 0]
     return corr_data
 
-def select_indices(bool_array, num_indices, spacing = 2, random_distance=5):
+def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5, layer=0):
     # Get the indices of the true elements in the boolean array
+    
+    bool_array = array < (threshold + layer * 25)
+    
     true_indices = np.argwhere(bool_array)
     dst = distance_transform_edt(bool_array)
 
@@ -35,6 +41,15 @@ def select_indices(bool_array, num_indices, spacing = 2, random_distance=5):
             chosen_indices.append(random_true_index)
             
         n_attempts += 1
+    if len(chosen_indices) < num_indices:
+        if layer < 10:
+            return select_indices(array, threshold, num_indices, spacing, random_distance, layer + 1)
+        else:
+            if len(chosen_indices) > 0:
+                x_indices, y_indices = zip(*chosen_indices)
+                return x_indices, y_indices
+            return None
+        
     # Split the chosen indices into x and y groups
     x_indices, y_indices = zip(*chosen_indices)
     
@@ -48,14 +63,16 @@ def correct_well(well, threshold = 75):
     well_diff_sng = np.max(well_diff, axis = 0)
     corr_data[:, well_diff_sng > np.std(well_diff_sng) * 3] = 0
     corr_data *= 1000
+    corr_data[corr_data < 0] = 0
     
-    mask = corr_data[-1] < threshold
+    indices = select_indices(corr_data[-1], threshold, 7, 2, 2)
     
-    indices = select_indices(mask, 10, 2, 3)
-    
-    fltr = np.transpose(np.tile(np.mean(corr_data[:, indices[1], indices[0]], axis=1), (80, 80, 1)), (2,0,1))
-    
-    corr_data -= fltr
+    if indices != None:
+        fltr = np.transpose(np.tile(np.mean(corr_data[:, indices[1], indices[0]], axis=1), (80, 80, 1)), (2,0,1))
+        corr_data -= fltr
+    else:
+        print('Could not perform random background correction!')
+        
     corr_data -= corr_data[0, :, :]
     corr_data[corr_data < 0] = 0
     
