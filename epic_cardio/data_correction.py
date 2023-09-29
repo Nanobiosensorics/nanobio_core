@@ -61,15 +61,17 @@ def correct_well(well, threshold = 75):
     
     well_diff = np.diff(corr_data, axis = 0)
     well_diff_sng = np.max(well_diff, axis = 0)
-    corr_data[:, well_diff_sng > np.std(well_diff_sng) * 3] = 0
+    mask = well_diff_sng > np.std(well_diff_sng) * 3
+    corr_data[:, mask] = 0
     corr_data *= 1000
-    corr_data[corr_data < 0] = 0
+    # corr_data[corr_data < 0] = 0
     
     indices = select_indices(corr_data[-1], threshold, 7, 2, 2)
     
     if indices != None:
         fltr = np.transpose(np.tile(np.mean(corr_data[:, indices[1], indices[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
+        corr_data[:, mask] = 0
     else:
         print('Could not perform random background correction!')
         
