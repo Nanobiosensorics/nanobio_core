@@ -76,6 +76,6 @@ def correct_well(well, threshold = 75):
         print('Could not perform random background correction!')
         
     corr_data -= corr_data[0, :, :]
-    corr_data[corr_data < 0] = 0
+    # corr_data[corr_data < 0] = 0
     
     return corr_data
