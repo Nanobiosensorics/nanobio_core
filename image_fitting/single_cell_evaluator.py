@@ -344,8 +344,8 @@ class CardioMicSingleCellEvaluator():
     def save(self, path, well_id = 'well', px_range = 3):
         if len(self.selected_coords) > 0:
             slaced_px_range = int(self.scale / 80 * px_range)
-            max_signals = np.zeros((len(self.selected_coords), self.well.shape[0]))
-            cover_signals = np.zeros((len(self.selected_coords), self.well.shape[0]))
+            max_signals = np.zeros((len(self.selected_coords), self.well.shape[0]), dtype=np.float32)
+            cover_signals = np.zeros((len(self.selected_coords), self.well.shape[0]), dtype=np.float32)
             # weigthed_cover_signals = np.zeros((len(selected_coords), im_src.shape[0]))
             cell_areas = np.zeros(len(self.selected_coords), dtype=np.float32)
             cell_mic_centers = np.zeros((len(self.selected_coords), 2), dtype=np.uint16)
