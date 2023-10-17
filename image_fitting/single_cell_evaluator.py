@@ -11,6 +11,9 @@ import json
 from skimage.segmentation import watershed
 from scipy import ndimage as ndi
 
+def dice_loss(y, p):
+    return np.abs(1 - ((2*np.sum(y*p) + 1) / (np.sum(y) + np.sum(p) + 1)))
+
 class SingleCellDisplayContour:
     CELL = 0
     MAX = 1
@@ -20,7 +23,7 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
 
-    def __init__(self, time, well, im_mic, im_mask, params, load_selection=None, 
+    def __init__(self, time, well, im_mic, im_mask, im_pred, params, load_selection=None, 
                  save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
                  filter_params = {
                     'area': (-np.Inf, np.Inf),
@@ -58,6 +61,7 @@ class CardioMicSingleCellEvaluator():
 
         im_markers = im_mask[mic_slice]
         im_mic = im_mic[mic_slice]
+        im_pred = im_pred[mic_slice]
         im_cardio = im_cardio[cardio_slice]
         im_pxs = im_pxs[cardio_slice]
 
@@ -93,7 +97,7 @@ class CardioMicSingleCellEvaluator():
         im_contour[im_markers > 0] = 1
         self.im_contour = get_contour(im_contour, 1)
 
-        self.im_cardio, self.im_mic, self.im_markers, self.im_pxs, self.im_contour, self.centers, self.im_watershed = im_cardio, im_mic, im_markers, im_pxs, im_contour, centers, im_watershed
+        self.im_cardio, self.im_mic, self.im_markers, self.im_pred, self.im_pxs, self.im_contour, self.centers, self.im_watershed = im_cardio, im_mic, im_markers, im_pred, im_pxs, im_contour, centers, im_watershed
 
         if load_selection != None:
             if os.path.exists(load_selection):
@@ -350,16 +354,21 @@ class CardioMicSingleCellEvaluator():
             cell_areas = np.zeros(len(self.selected_coords), dtype=np.float32)
             cell_mic_centers = np.zeros((len(self.selected_coords), 2), dtype=np.uint16)
             cell_cardio_centers = np.zeros((len(self.selected_coords), 2), dtype=np.uint8)
-            cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
-            cell_mics_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
-            cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
-            cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
+            # cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
+            # cell_mics_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
+            # cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
+            # cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
             cell_cardio = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
             cell_cover = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
-            cell_watershed = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
+            cell_pred = []
+            cell_watershed = []# np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
             now = datetime.now()
 
             selection = []
+
+            dl_p = []
+            dl_cp = []
+            dl_w = []
 
             for i, selected_id in enumerate(sorted(self.selected_coords)):
                 # print(f'Progress {i + 1}/{len(self.selected_coords)}', end='\r')
@@ -377,35 +386,55 @@ class CardioMicSingleCellEvaluator():
                 ranges = ((max(cell_center[1] - slaced_px_range, 0), min(cell_center[1] + slaced_px_range, self.im_mic.shape[0])),
                           (max(cell_center[0] - slaced_px_range, 0), min(cell_center[0] + slaced_px_range, self.im_mic.shape[1])))
                 mic_slice = (slice(*ranges[0]), slice(*ranges[1]))
-                mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
+                # mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
                 ranges = ((max(cardio_center[1] - px_range, 0), min(cardio_center[1] + px_range, self.well.shape[1])),
                           (max(cardio_center[0] - px_range, 0), min(cardio_center[0] + px_range, self.well.shape[2])))
                 cardio_slice = (slice(*ranges[0]), slice(*ranges[1]))
                 cardio_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
-                cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
-                cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
-                cell_mics_singular[i] = cell_mics[i].copy()
-                cell_mics_singular[i][cell_markers[i] != cell_id] = 0
-                cell_markers_singular[i] = cell_markers[i] == cell_id
-                cell_cardio[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
+                # cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
+                # cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
+                # cell_mics_singular[i] = cell_mics[i].copy()
+                # cell_mics_singular[i][cell_markers[i] != cell_id] = 0
+                # cell_markers_singular[i] = cell_markers[i] == cell_id
+
+                cardio_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
+                cardio_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
+                cell_cardio[i] = cardio_im
                 
-                cover_im = get_cover_px_well_by_cell_id(cell_id, self.well, self.im_markers, self.im_pxs)
-                cover_im = cover_im[:, cardio_slice[0], cardio_slice[1]]
-                cell_cover[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = cover_im
+                cover_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
+                cover_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = get_cover_px_well_by_cell_id(cell_id, self.well, self.im_markers, self.im_pxs)[:, cardio_slice[0], cardio_slice[1]]
+                cell_cover[i] = cover_im
+
+                pred_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
+                pred_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = get_cover_px_well_by_cell_id(cell_id, self.well, self.im_pred, self.im_pxs)[:, cardio_slice[0], cardio_slice[1]]
+                if np.sum(pred_im) != 0:
+                    dl_p.append(dice_loss(self.im_markers[mic_slice[0], mic_slice[1]] > 0, self.im_pred[mic_slice[0], mic_slice[1]] > 0))
+                    dl_cp.append(dice_loss(cover_im > 0, pred_im > 0))
+                    cell_pred.append(pred_im)
                 
-                ws_im = self.well.copy()
-                ws_im[:, self.cardio_watershed != cell_id] = 0
-                ws_im = ws_im[:, cardio_slice[0], cardio_slice[1]]
-                if np.sum(ws_im) == 0:
-                    ws_im = cover_im.copy()
-                cell_watershed[i, :, cardio_slice_proj[0], cardio_slice_proj[1]] = ws_im
+                ws_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
+                well_ws = self.well.copy()
+                well_ws[:, self.cardio_watershed != cell_id] = 0
+                ws_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = well_ws[:, cardio_slice[0], cardio_slice[1]]
+                if np.sum(ws_im) != 0:
+                    dl_w.append(dice_loss(ws_im > 0, cardio_im > 0))
+                    cell_watershed.append(ws_im)
 
                 selection.append(int(cell_id))
 
-                # cell mic image, cardio video, coordinates
-            # print(f'Duration {datetime.now() - now}')
+            de_p = 1 - (len(cell_pred) / len(selection))
+            de_w = 1 - (len(cell_watershed) / len(selection))
+            dl_p_s = [np.mean(dl_p), np.std(dl_p)]
+            dl_cp_s = [np.mean(dl_cp), np.std(dl_cp)]
+            dl_w_s = [np.mean(dl_w), np.std(dl_w)]
+
+            cell_pred = np.asarray(cell_pred) 
+            cell_watershed = np.asarray(cell_watershed)
+            # print(de_p, de_w, dl_p_s, dl_cp_s, dl_w_s)
+            # cell mic image, cardio video, coordinates
+            print(f'Duration {datetime.now() - now}')
             pd.DataFrame(np.vstack((self.time, max_signals))).to_csv(os.path.join(path, f'{well_id}_max_signals.csv'))
             pd.DataFrame(np.vstack((self.time, cover_signals))).to_csv(os.path.join(path, f'{well_id}_int_signals.csv'))
             pd.DataFrame(cell_areas).to_csv(os.path.join(path, f'{well_id}_areas.csv'))
@@ -413,7 +442,7 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, f'{well_id}_cardio_centers.csv'))
             # np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
             #          mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
-            np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover)
+            np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover, cardio_pred=cell_pred)
             
             sel_path = os.path.join(path, '.metadata')
             if not os.path.exists(sel_path):
@@ -421,3 +450,9 @@ class CardioMicSingleCellEvaluator():
             
             with open(os.path.join(sel_path, f'{well_id}_selection.json'), 'w') as fp:
                 json.dump({'ids': selection}, fp)
+            with open(os.path.join(sel_path, f'{well_id}_stats.json'), 'w') as fp:
+                json.dump({'de_p': de_p,
+                           'de_w': de_w,
+                           'dl_p': dl_p_s,
+                           'dl_cp': dl_cp_s,
+                           'dl_w': dl_w_s}, fp)
