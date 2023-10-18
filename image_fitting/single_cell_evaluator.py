@@ -23,7 +23,7 @@ class SingleCellDisplayContour:
 
 class CardioMicSingleCellEvaluator():
 
-    def __init__(self, time, well, im_mic, im_mask, im_pred, params, load_selection=None, 
+    def __init__(self, time, well, im_mic, im_mask, im_pred, params, load_selection=None,
                  save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
                  filter_params = {
                     'area': (-np.Inf, np.Inf),
@@ -81,18 +81,18 @@ class CardioMicSingleCellEvaluator():
         im_watershed = watershed(-crd, mask, mask=bn)
         im_watershed *= bn.astype(int)
         # self.cardio_watershed = im_watershed.copy()
-        
+
         markers, centers = CardioMicSingleCellEvaluator._adjacent_filtering(filter_params, markers, im_markers, im_pxs)
-        
+
         self.cardio_watershed = np.zeros(im_watershed.shape)
         for marker in markers:
             self.cardio_watershed[im_watershed == marker] = marker
-            
+
         im_watershed = cv2.resize(self.cardio_watershed, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
         im_watershed = im_watershed[cardio_slice]
-        
+
         self.markers = markers
-        
+
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         self.im_contour = get_contour(im_contour, 1)
@@ -185,14 +185,14 @@ class CardioMicSingleCellEvaluator():
             mx = np.max(get_max_px_signal_by_cell_id(i, well, im_cardio_sliced, im_markers_sliced, im_pxs_sliced))
             if (ar > filter_params['area'][0]) & (ar < filter_params['area'][1]) & (mx > filter_params['max_value'][0]) & (mx < filter_params['max_value'][1]):
                 markers_selected.append(i)
-                
+
         # print(f'Duration {datetime.now() - now}')
         # print(f'Cell centers calculation')
         now = datetime.now()
         im_markers_selected = mask_centers(im_markers_sliced, markers_selected)
         # print(f'Duration {datetime.now() - now}')
         return markers_selected, im_markers_selected
-    
+
     @classmethod
     def _adjacent_filtering(self, filter_params, markers_selected_sc, im_markers_sliced, im_pxs_sliced):
         now = datetime.now()
@@ -311,7 +311,7 @@ class CardioMicSingleCellEvaluator():
     #     elm6.set_data((np.linspace(0, self.well.shape[0], self.well.shape[0]), sig))
     #     ax[2, 1].set_ylim((np.min(sig), np.max(sig)))
         self.fig.canvas.draw()
-        
+
     def select_all(self):
         self.selected_coords = list(range(len(self.markers)))
 
@@ -344,7 +344,7 @@ class CardioMicSingleCellEvaluator():
             self.on_button_minus_clicked(None)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
-            
+
     def save(self, path, well_id = 'well', px_range = 3):
         if len(self.selected_coords) > 0:
             slaced_px_range = int(self.scale / 80 * px_range)
@@ -362,7 +362,7 @@ class CardioMicSingleCellEvaluator():
             cell_cover = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
             cell_pred = []
             cell_watershed = []# np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
-            now = datetime.now()
+            # now = datetime.now()
 
             selection = []
 
@@ -402,7 +402,7 @@ class CardioMicSingleCellEvaluator():
                 cardio_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
                 cardio_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
                 cell_cardio[i] = cardio_im
-                
+
                 cover_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
                 cover_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = get_cover_px_well_by_cell_id(cell_id, self.well, self.im_markers, self.im_pxs)[:, cardio_slice[0], cardio_slice[1]]
                 cell_cover[i] = cover_im
@@ -413,7 +413,7 @@ class CardioMicSingleCellEvaluator():
                     dl_p.append(dice_loss(self.im_markers[mic_slice[0], mic_slice[1]] > 0, self.im_pred[mic_slice[0], mic_slice[1]] > 0))
                     dl_cp.append(dice_loss(cover_im > 0, pred_im > 0))
                     cell_pred.append(pred_im)
-                
+
                 ws_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
                 well_ws = self.well.copy()
                 well_ws[:, self.cardio_watershed != cell_id] = 0
@@ -430,11 +430,11 @@ class CardioMicSingleCellEvaluator():
             dl_cp_s = [np.mean(dl_cp), np.std(dl_cp)]
             dl_w_s = [np.mean(dl_w), np.std(dl_w)]
 
-            cell_pred = np.asarray(cell_pred) 
+            cell_pred = np.asarray(cell_pred)
             cell_watershed = np.asarray(cell_watershed)
             # print(de_p, de_w, dl_p_s, dl_cp_s, dl_w_s)
             # cell mic image, cardio video, coordinates
-            print(f'Duration {datetime.now() - now}')
+            # print(f'Duration {datetime.now() - now}')
             pd.DataFrame(np.vstack((self.time, max_signals))).to_csv(os.path.join(path, f'{well_id}_max_signals.csv'))
             pd.DataFrame(np.vstack((self.time, cover_signals))).to_csv(os.path.join(path, f'{well_id}_int_signals.csv'))
             pd.DataFrame(cell_areas).to_csv(os.path.join(path, f'{well_id}_areas.csv'))
@@ -442,12 +442,14 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, f'{well_id}_cardio_centers.csv'))
             # np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
             #          mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
+
+            # print(cell_cardio.shape, cell_cover.shape, cell_pred.shape, cell_watershed.shape)
             np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover, cardio_pred=cell_pred)
-            
+
             sel_path = os.path.join(path, '.metadata')
             if not os.path.exists(sel_path):
                 os.makedirs(sel_path)
-            
+
             with open(os.path.join(sel_path, f'{well_id}_selection.json'), 'w') as fp:
                 json.dump({'ids': selection}, fp)
             with open(os.path.join(sel_path, f'{well_id}_stats.json'), 'w') as fp:
