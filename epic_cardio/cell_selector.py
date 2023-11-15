@@ -171,8 +171,6 @@ class WellLineSelector:
             self.on_button_minus_clicked(None)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
-    
-
 
 class WellArrayLineSelector:
     # Jelkiválasztó
