@@ -37,7 +37,7 @@ def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5
         random_true_index = np.unravel_index(idx, (rows, cols))
         
         # Check if the chosen index is at least 'random_distance' units away from other chosen indices
-        if all(np.linalg.norm(np.array(chosen_index) - random_true_index) >= random_distance for chosen_index in chosen_indices) and dst[*random_true_index] >= spacing:
+        if all(np.linalg.norm(np.array(chosen_index) - random_true_index) >= random_distance for chosen_index in chosen_indices) and dst[random_true_index[0],random_true_index[1]] >= spacing:
             chosen_indices.append(random_true_index)
             
         n_attempts += 1
@@ -123,23 +123,24 @@ class WellArrayBackgroundSelector:
             
 
     def draw_plot(self):
-        self._ax.set_title(self._ids[self._well_id])
-        if self._im == None:
-            self._im = self._ax.imshow(self._well)
-        else:
-            self._im.set_data(self._well)
-        arr = self.selected_coords[self._ids[self._well_id]]
-        if len(arr) > 0:
-            if self._dots == None:
-                self._dots, = self._ax.plot([e[0] for e in arr], [e[1] for e in arr], 'ro', markersize=5)
+        if not self.closed:
+            self._ax.set_title(self._ids[self._well_id])
+            if self._im == None:
+                self._im = self._ax.imshow(self._well)
             else:
-                self._dots.set_xdata([e[0] for e in arr])
-                self._dots.set_ydata([e[1] for e in arr])
-        elif self._dots != None:
-            self._dots.remove()
-            self._dots = None
+                self._im.set_data(self._well)
+            arr = self.selected_coords[self._ids[self._well_id]]
+            if len(arr) > 0:
+                if self._dots == None:
+                    self._dots, = self._ax.plot([e[0] for e in arr], [e[1] for e in arr], 'ro', markersize=5)
+                else:
+                    self._dots.set_xdata([e[0] for e in arr])
+                    self._dots.set_ydata([e[1] for e in arr])
+            elif self._dots != None:
+                self._dots.remove()
+                self._dots = None
 
-        self._fig.canvas.draw()
+            self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
         if self._well_id < len(self._ids):
@@ -168,7 +169,7 @@ class WellArrayBackgroundSelector:
             self.on_button_minus_clicked(None)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
-        elif event.key == 'delete':
+        elif event.key == 'delete' or event.key == 'backspace':
             if len(self.selected_coords[self._ids[self._well_id]]) > 0:
                 self.selected_coords[self._ids[self._well_id]].pop()
                 self.draw_plot()
