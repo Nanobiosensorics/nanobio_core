@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import cv2
 from .data_correction import corr_data
 
-def find_local_maxima(frame, min_threshold=0.1, max_threshold=10):
+def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_size=5):
     '''
         Finding local maximum points on a frame.
         
@@ -18,8 +18,7 @@ def find_local_maxima(frame, min_threshold=0.1, max_threshold=10):
     # import scipy.ndimage as ndimage
     # import scipy.ndimage.filters as filters
     # import numpy as np
-
-    neighborhood_size = 5
+    
     data = frame
 
     data_max = filters.maximum_filter(data, neighborhood_size)
