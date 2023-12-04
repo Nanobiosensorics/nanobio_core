@@ -214,8 +214,8 @@ class WellArrayLineSelector:
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
             self._lines_arr = np.asarray(self._wells_data[self._ids[self._well_id]][2]).copy()
             
-            if len(self._phases) > 1:
-                for p in self._phases[1:]:
+            if len(self._phases) > 0:
+                for p in self._phases:
                     self._lines_arr[:, p] = np.nan
             
             self._i = 1
