@@ -263,6 +263,11 @@ class WellArrayLineSelector:
             self.on_button_plus_clicked(None)
         elif event.key == 'left' or event.key == '4':
             self.on_button_minus_clicked(None)
+        elif event.key == 'down':
+            self._well_id += 1
+            self.change_well()
+            if self.closed is False:
+                self.draw_plot(self._i - 1)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
 
