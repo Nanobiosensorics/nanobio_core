@@ -63,8 +63,9 @@ def correct_well(well, threshold = 75, coords=[]):
     well_diff_sng = np.max(well_diff, axis = 0)
     mask = well_diff_sng > np.std(well_diff_sng) * 3
     corr_data[:, mask] = 0
-    corr_data *= 1000
     # corr_data[corr_data < 0] = 0
+    corr_data *= 1000
+
     indices = None
     if len(coords) > 0:
         indices = [[e[0] for e in coords], [e[1] for e in coords]]
@@ -74,7 +75,7 @@ def correct_well(well, threshold = 75, coords=[]):
     if indices != None:
         fltr = np.transpose(np.tile(np.mean(corr_data[:, indices[1], indices[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
-        corr_data[:, mask] = 0
+        # corr_data[:, mask] = 0
     else:
         print('Could not perform random background correction!')
         
@@ -126,7 +127,7 @@ class WellArrayBackgroundSelector:
         if not self.closed:
             self._ax.set_title(self._ids[self._well_id])
             if self._im == None:
-                self._im = self._ax.imshow(self._well)
+                self._im = self._ax.imshow(self._well, vmin=0, vmax=np.max(list(map(np.max, list(self._wells_data.values())))))
             else:
                 self._im.set_data(self._well)
             arr = self.selected_coords[self._ids[self._well_id]]
@@ -139,7 +140,6 @@ class WellArrayBackgroundSelector:
             elif self._dots != None:
                 self._dots.remove()
                 self._dots = None
-
             self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
