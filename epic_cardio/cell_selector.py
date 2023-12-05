@@ -191,7 +191,7 @@ class WellArrayLineSelector:
         self.change_well()
 
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
-        self._im = self._ax1.imshow(self._well) # , vmin = np.min(self._well), vmax = np.max(self._well)
+        self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(list(map(np.max, [well for well, ptss, lines in self._wells_data.values()]))))
         self._elm, = self._ax2.plot(self._times, self._lines_arr[0, :])
         self._dots, = self._ax1.plot(self._pts_arr[0, 0], self._pts_arr[0, 1] , 'ro', markersize=5)
         self._selected, = self._ax1.plot(self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0] , 'go', markersize=5)
