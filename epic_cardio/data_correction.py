@@ -126,10 +126,10 @@ class WellArrayBackgroundSelector:
     def draw_plot(self):
         if not self.closed:
             self._ax.set_title(self._ids[self._well_id])
-            if self._im == None:
-                self._im = self._ax.imshow(self._well, vmin=0, vmax=np.max(list(map(np.max, list(self._wells_data.values())))))
-            else:
-                self._im.set_data(self._well)
+            
+            if self._im != None:
+                self._im.remove()
+            self._im = self._ax.imshow(self._well, vmin = 0, vmax=np.max(self._well))
             arr = self.selected_coords[self._ids[self._well_id]]
             if len(arr) > 0:
                 if self._dots == None:
