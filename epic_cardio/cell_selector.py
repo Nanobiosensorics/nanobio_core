@@ -182,13 +182,13 @@ class WellArrayLineSelector:
     def __init__(self, wells_data, times, phases, block=True):
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
-        self._im = None
         self._well_id = 0
         self._wells_data = wells_data
         self._times = times
         self._phases = phases
         self.texts = []
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
+        self.change_well()
         # self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
         # self._elm, = self._ax2.plot(self._times[self._lines_arr.shape[1]], self._lines_arr[0, :])
         self._dots, = self._ax1.plot(self._pts_arr[0, 0], self._pts_arr[0, 1] , 'ro', markersize=5)
@@ -198,7 +198,6 @@ class WellArrayLineSelector:
         self._ax2.set_xlabel('Time(s)')
         self._ax2.set_ylabel('WS(pm)')
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
-        self.change_well()
         self.draw_plot(0)
         plt.show(block=block)
     
@@ -225,7 +224,9 @@ class WellArrayLineSelector:
                 
             if hasattr(self, '_im'):
                 self._im.remove()
+            if hasattr(self, '_elm'):
                 self._elm.remove()
+                
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
             self._elm, = self._ax2.plot(self._times[self._lines_arr.shape[1]], self._lines_arr[0, :])
 
