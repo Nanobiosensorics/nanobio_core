@@ -66,14 +66,13 @@ def correct_well(well, threshold = 75, coords=[]):
     # corr_data[corr_data < 0] = 0
     corr_data *= 1000
 
-    indices = None
     if len(coords) > 0:
-        indices = [[e[0] for e in coords], [e[1] for e in coords]]
+        coords = [[e[0] for e in coords], [e[1] for e in coords]]
     else:
-        indices = select_indices(corr_data[-1], threshold, 7, 2, 2)
+        coords = select_indices(corr_data[-1], threshold, 7, 2, 2)
 
-    if indices != None:
-        fltr = np.transpose(np.tile(np.mean(corr_data[:, indices[1], indices[0]], axis=1), (80, 80, 1)), (2,0,1))
+    if coords != None:
+        fltr = np.transpose(np.tile(np.mean(corr_data[:, coords[1], coords[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
         # corr_data[:, mask] = 0
     else:
@@ -82,7 +81,7 @@ def correct_well(well, threshold = 75, coords=[]):
     corr_data -= corr_data[0, :, :]
     # corr_data[corr_data < 0] = 0
     
-    return corr_data
+    return corr_data, list(zip(coords[0], coords[1]))
 
 class WellArrayBackgroundSelector:
     # Jelkiválasztó
@@ -91,14 +90,19 @@ class WellArrayBackgroundSelector:
     # A jelek közötti navigáció lehetségesa billentyűzeten a balra, jobbra nyilakkal és
     # a mentés az ENTER billentyűvel
     _ids = [ 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
-    def __init__(self, wells_data, block=True):
+    def __init__(self, wells_data, coords={}, block=True):
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
         self._well_id = 0
         self._wells_data = wells_data
         self._dots = None
         self._im = None 
-        self.selected_coords = {idx: [] for idx in WellArrayBackgroundSelector._ids}
+        self.selected_coords = {}
+        for idx in WellArrayBackgroundSelector._ids:
+            if idx in list(coords.keys()):
+                self.selected_coords[idx] = list(coords[idx])
+            else:
+                self.selected_coords[idx] = []
         self._fig, self._ax = plt.subplots(1, figsize=(8, 8))
         self._ax.set_xlabel('Pixel')
         self._ax.set_ylabel('Pixel')
