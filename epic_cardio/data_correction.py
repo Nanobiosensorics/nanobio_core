@@ -59,11 +59,10 @@ def correct_well(well, threshold = 75, coords=[]):
     corr_data = well.copy()
     corr_data -= corr_data[0, :, :]
     
-    well_diff = np.diff(corr_data, axis = 0)
-    well_diff_sng = np.max(well_diff, axis = 0)
-    mask = well_diff_sng > np.std(well_diff_sng) * 3
-    corr_data[:, mask] = 0
-    # corr_data[corr_data < 0] = 0
+    # well_diff = np.diff(corr_data, axis = 0)
+    # well_diff_sng = np.max(well_diff, axis = 0)
+    # mask = well_diff_sng > np.std(well_diff_sng) * 3
+    # corr_data[:, mask] = 0
     corr_data *= 1000
 
     if len(coords) > 0:
@@ -74,12 +73,10 @@ def correct_well(well, threshold = 75, coords=[]):
     if coords != None:
         fltr = np.transpose(np.tile(np.mean(corr_data[:, coords[1], coords[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
-        corr_data[:, mask] = 0
+        # corr_data[:, mask] = 0
     else:
         print('Could not perform random background correction!')
-        
-    # corr_data -= corr_data[0, :, :]
-    corr_data[corr_data < 0] = 0
+    corr_data[corr_data > 5000] = 0
     
     return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1]))
 
