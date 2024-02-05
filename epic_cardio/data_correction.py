@@ -74,14 +74,14 @@ def correct_well(well, threshold = 75, coords=[]):
     if coords != None:
         fltr = np.transpose(np.tile(np.mean(corr_data[:, coords[1], coords[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
-        # corr_data[:, mask] = 0
+        corr_data[:, mask] = 0
     else:
         print('Could not perform random background correction!')
         
-    corr_data -= corr_data[0, :, :]
-    # corr_data[corr_data < 0] = 0
+    # corr_data -= corr_data[0, :, :]
+    corr_data[corr_data < 0] = 0
     
-    return corr_data, list(zip(coords[0], coords[1]))
+    return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1]))
 
 class WellArrayBackgroundSelector:
     # Jelkiválasztó

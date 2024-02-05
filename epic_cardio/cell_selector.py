@@ -228,7 +228,7 @@ class WellArrayLineSelector:
                 self._elm.remove()
                 
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-            self._elm, = self._ax2.plot(self._times[self._lines_arr.shape[1]], self._lines_arr[0, :])
+            self._elm, = self._ax2.plot(self._times, self._lines_arr[0, :])
 
     def draw_plot(self, cell_id):
         self._elm.set_data(self._times, self._lines_arr[cell_id, :])
