@@ -183,14 +183,16 @@ class WellArrayLineSelector:
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
         self._well_id = 0
+        self._well_max = 0
         self._wells_data = wells_data
         self._times = times
         self._phases = phases
         self.texts = []
+        
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
+        
         self.change_well()
-        # self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-        # self._elm, = self._ax2.plot(self._times[self._lines_arr.shape[1]], self._lines_arr[0, :])
+        
         self._dots, = self._ax1.plot(self._pts_arr[0, 0], self._pts_arr[0, 1] , 'ro', markersize=5)
         self._selected, = self._ax1.plot(self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0] , 'go', markersize=5)
         self._ax1.set_xlabel('Pixel')
@@ -200,6 +202,14 @@ class WellArrayLineSelector:
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
         self.draw_plot(0)
         plt.show(block=block)
+        
+    def _get_line(self, cell_id):
+        current_line = self._wells_data[self._ids[self._well_id]][0][:, self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]]
+        
+        if len(self._phases) > 0:
+            for p in self._phases:
+                current_line[p] = np.nan
+        return current_line
     
     def change_well(self):
         if self._well_id == len(self._ids):
@@ -210,11 +220,6 @@ class WellArrayLineSelector:
                 self._well_id += 1
             self._well = get_max_well(self._wells_data[self._ids[self._well_id]][0])
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
-            self._lines_arr = np.asarray(self._wells_data[self._ids[self._well_id]][2]).copy()
-            
-            if len(self._phases) > 0:
-                for p in self._phases:
-                    self._lines_arr[:, p] = np.nan
             
             self._i = 1
             if len(self.texts) > 0:
@@ -226,24 +231,27 @@ class WellArrayLineSelector:
                 self._im.remove()
             if hasattr(self, '_elm'):
                 self._elm.remove()
-                
+            
+            current_line = self._get_line(0)
+                    
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-            self._elm, = self._ax2.plot(self._times[:self._lines_arr.shape[1]], self._lines_arr[0, :])
+            self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line)
+        
+            self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
 
     def draw_plot(self, cell_id):
-        self._elm.set_data(self._times[:self._lines_arr.shape[1]], self._lines_arr[cell_id, :])
+        current_line = self._get_line(cell_id)
+        self._elm.set_data(self._times[:len(current_line)], current_line)
         self._ax1.set_title(self._ids[self._well_id])
-        self._ax2.set_title(f'Record: {cell_id + 1}/{self._lines_arr.shape[0]}')
-        # self._im.set_data(self._well[np.argmax(self._lines_arr[cell_id, :]), :, :])
+        self._ax2.set_title(f'Record: {cell_id + 1}/{self._pts_arr.shape[0]}')
         self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
         self._selected.set_data((self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 1]))
-        # self._ax2.set_ylim((np.min(self._lines_arr), np.max(self._lines_arr)))
-        self._ax2.set_ylim(-100, np.nanmax(self._lines_arr))
+        self._ax2.set_ylim(-100, self._well_max)
         self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
         self._i += 1
-        if self._i >= self._lines_arr.shape[0] + 1:
+        if self._i >= self._pts_arr.shape[0] + 1:
             self._well_id += 1
             self.change_well()
         if self.closed is False:
