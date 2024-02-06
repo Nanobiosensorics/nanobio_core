@@ -55,7 +55,7 @@ def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5
     
     return x_indices, y_indices
 
-def correct_well(well, threshold = 75, coords=[]):
+def correct_well(well, threshold = 75, coords=[], mode='mean'):
     corr_data = well.copy()
     corr_data -= corr_data[0, :, :]
     
@@ -71,7 +71,8 @@ def correct_well(well, threshold = 75, coords=[]):
         coords = select_indices(corr_data[-1], threshold, 7, 2, 2)
 
     if coords != None:
-        fltr = np.transpose(np.tile(np.mean(corr_data[:, coords[1], coords[0]], axis=1), (80, 80, 1)), (2,0,1))
+        filter_method = np.median if mode == 'median' else np.mean
+        fltr = np.transpose(np.tile(filter_method(corr_data[:, coords[1], coords[0]], axis=1), (80, 80, 1)), (2,0,1))
         corr_data -= fltr
         # corr_data[:, mask] = 0
     else:
