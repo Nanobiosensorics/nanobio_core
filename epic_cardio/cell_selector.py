@@ -228,17 +228,17 @@ class WellArrayLineSelector:
                 self._elm.remove()
                 
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-            self._elm, = self._ax2.plot(self._times, self._lines_arr[0, :])
+            self._elm, = self._ax2.plot(self._times[:self._lines_arr.shape[1]], self._lines_arr[0, :])
 
     def draw_plot(self, cell_id):
-        self._elm.set_data(self._times, self._lines_arr[cell_id, :])
+        self._elm.set_data(self._times[:self._lines_arr.shape[1]], self._lines_arr[cell_id, :])
         self._ax1.set_title(self._ids[self._well_id])
         self._ax2.set_title(f'Record: {cell_id + 1}/{self._lines_arr.shape[0]}')
         # self._im.set_data(self._well[np.argmax(self._lines_arr[cell_id, :]), :, :])
         self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
         self._selected.set_data((self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 1]))
         # self._ax2.set_ylim((np.min(self._lines_arr), np.max(self._lines_arr)))
-        self._ax2.set_ylim((-100, np.nanmax(self._lines_arr)))
+        self._ax2.set_ylim(-100, np.nanmax(self._lines_arr))
         self._fig.canvas.draw()
 
     def on_button_plus_clicked(self, b):
