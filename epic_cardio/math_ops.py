@@ -214,12 +214,7 @@ def calculate_cells(well):
 
 def calculate_cell_maximas(data, **kwargs):
     data_mx = np.max(data, axis = 0)
-    ptss = np.array(find_local_maxima(data_mx, **kwargs), dtype=np.int32).T
-    lines = []
-    for i in range(ptss.shape[0]):
-        lines.append(data[:, int(ptss[i, 1]), int(ptss[i, 0])])
-    lines = np.asarray(lines)
-    return ptss, lines
+    return np.array(find_local_maxima(data_mx, **kwargs), dtype=np.int32).T
 
 def standardize_signal(signal):
     return (signal - signal.mean()) / signal.std()

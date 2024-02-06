@@ -216,7 +216,7 @@ class WellArrayLineSelector:
             plt.close(self._fig)
             self.closed = True
         else:
-            while(self._wells_data[self._ids[self._well_id]][2].shape[0] == 0):
+            while(self._wells_data[self._ids[self._well_id]][1].shape[0] == 0):
                 self._well_id += 1
             self._well = get_max_well(self._wells_data[self._ids[self._well_id]][0])
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
