@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+from scipy import ndimage
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')
@@ -55,14 +56,24 @@ def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5
     
     return x_indices, y_indices
 
+def dilate_mask(mask, times=1):
+    for i in range(times):
+        mask = ndimage.binary_dilation(mask, [
+        [False, True, False],
+        [ True, True,  True],
+        [False, True, False],
+    ])
+    return mask
+
 def correct_well(well, threshold = 75, coords=[], mode='mean'):
     corr_data = well.copy()
-    corr_data -= corr_data[0, :, :]
     
-    # well_diff = np.diff(corr_data, axis = 0)
-    # well_diff_sng = np.max(well_diff, axis = 0)
-    # mask = well_diff_sng > np.std(well_diff_sng) * 3
-    # corr_data[:, mask] = 0
+    df = np.abs(np.diff(corr_data, axis=0))
+    df = np.sum(df, axis=0)
+    mask = np.logical_or(df == 0, df > 1000)
+    mask = dilate_mask(mask, 1)
+    
+    corr_data -= corr_data[0, :, :]
     corr_data *= 1000
 
     if len(coords) > 0:
@@ -77,7 +88,8 @@ def correct_well(well, threshold = 75, coords=[], mode='mean'):
         # corr_data[:, mask] = 0
     else:
         print('Could not perform random background correction!')
-    corr_data[corr_data > 5000] = 0
+    corr_data[np.abs(corr_data) > 5000] = 0
+    corr_data[:, mask] = 0
     
     return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1]))
 
@@ -115,7 +127,7 @@ class WellArrayBackgroundSelector:
             plt.close(self._fig)
             self.closed = True
         else:
-            self._well = self._wells_data[self._ids[self._well_id]][-1]
+            self._well = np.max(self._wells_data[self._ids[self._well_id]], axis = 0)
 
             if self._well_id != 0 and len(self.selected_coords[self._ids[self._well_id]]) == 0:
                 self.selected_coords[self._ids[self._well_id]] = self.selected_coords[self._ids[self._well_id - 1]].copy()
