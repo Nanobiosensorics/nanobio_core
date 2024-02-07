@@ -204,7 +204,7 @@ class WellArrayLineSelector:
         plt.show(block=block)
         
     def _get_line(self, cell_id):
-        current_line = self._wells_data[self._ids[self._well_id]][0][:, self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]].copy()
+        current_line = self._wells_data[self._ids[self._well_id]][0][:, self._pts_arr[cell_id, 1], self._pts_arr[cell_id, 0]].copy()
         
         if len(self._phases) > 0:
             for p in self._phases:
