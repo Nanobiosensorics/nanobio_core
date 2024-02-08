@@ -19,7 +19,7 @@ def load_data(path):
     print([(n+1, p) for n, p in enumerate(phases)])
     return wells, time, phases
 
-def preprocessing(preprocessing_params, wells, time, phases):
+def preprocessing(preprocessing_params, wells, time, phases, background_coords={}):
     well_data = {}
     filter_ptss = {}
     
