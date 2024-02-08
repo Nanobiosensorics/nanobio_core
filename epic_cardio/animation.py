@@ -32,7 +32,7 @@ def animate_well(data, filename, nframes, vmin, vmax, text):
                                    frames=nframes, interval=200, blit=True)
     anim.save(filename, fps=30, extra_args=['-vcodec', 'libx264'])
     
-def animate_well_by_ID(text):
+def animate_well_by_ID(wells, text):
     '''
         Select a well based on its ID in the well map and animate it.
         For example: "B2" is the well from the 2nd row and 2nd column.
