@@ -69,7 +69,7 @@ def load_high_freq_measurement(dir_path):
         ----------
         dir_path: the path to the folder
     '''
-    S = 0.0002
+    S = 0.002
     files = [ obj for obj in os.listdir(dir_path) if '_ms' == obj.lower()[-3:]]
     
     if len(files) == 0:
@@ -86,12 +86,12 @@ def load_high_freq_measurement(dir_path):
     
     avg_path = os.path.join(dir_path, files[0])
     
-    print(wl_power_path)
-    print(avg_path)
+    # print(wl_power_path)
+    # print(avg_path)
     
     fr = open( wl_power_path, "rb")
     init_map = np.frombuffer(fr.read(614400), dtype='uint16')
-    print(init_map.shape)
+    # print(init_map.shape)
     init_wl_map = np.reshape(init_map[:76800], [240, 320])
     fr.close()
 

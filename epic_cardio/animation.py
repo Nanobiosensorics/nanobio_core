@@ -48,7 +48,7 @@ def animate_well_by_ID(wells, text):
     s = np.std(well[well > 820])
     animate_well(well, f'./{text}.mp4', wells.shape[2], m - s, m + s, f'{text} well')
 
-def animate_well_maxima(data, coords, filename, nframes, vmin, vmax, text):
+def animate_well_maxima(data, coords, lines, time, filename, nframes, vmin, vmax, text):
     '''
         Animate a single well image sequence with its selected maximum points.
         
@@ -62,25 +62,40 @@ def animate_well_maxima(data, coords, filename, nframes, vmin, vmax, text):
         vmax        -    the upper boundary of the pixel values
         text        -    the title of the animated plot
     '''
-    fig = plt.figure(figsize=(20, 10), dpi=300)
+    fig, ax = plt.subplots(1,3, figsize=(15, 5), dpi=200)
     elements = []
-    im = plt.imshow(data[-1, :, :],interpolation='none', vmin=vmin, vmax=vmax)
+    im = ax[0].imshow(data[-1, :, :],interpolation='none', vmin=vmin, vmax=vmax)
     elements.append(im)
-    line, = plt.plot(coords[0][-1], coords[1][-1] , 'ro')
-    elements.append(line)
-    plt.colorbar()
-    plt.title(text)
+    _ = ax[0].scatter(coords[:, 0], coords[:, 1] , s=1, c='r')
+    # elements.append(line)
+    # plt.colorbar()
+    ax[0].set_title(text)
+    
+    mn = np.mean(lines, axis=0)
+    sd = np.std(lines, axis=0)
+    
+    ax[1].fill_between(time, mn - sd, mn + sd, alpha=.2)
+    ax[1].plot(time, mn - sd, c='b')
+    ax[1].plot(time, mn + sd, c='b')
+    ax[1].plot(time, mn, c='b')
+    ax[1].set_ylim(np.min(lines), np.max(lines))
+    tempo1 = ax[1].axvline(0, c='r')
+    elements.append(tempo1)
 
+    ax[2].plot(time, lines.T)
+    ax[2].set_ylim(np.min(lines), np.max(lines))
+    tempo2 = ax[2].axvline(0, c='r')
+    elements.append(tempo2)
 
     # animation function.  This is called sequentially
     def animate(i):
-        print(f'{i}', end='\r')
+        print(f'Progress {round(i / data.shape[0], 2)}% {i}', end='\r')
         elements[0].set_data(data[i, :, :])
-        elements[1].set_xdata(coords[0][i])
-        elements[1].set_ydata(coords[1][i])
+        elements[1].set_xdata(time[i])
+        elements[2].set_xdata(time[i])
         return elements
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     anim = animation.FuncAnimation(fig, animate, 
-                                   frames=nframes, interval=200, blit=True)
+                                   frames=nframes, interval=1, blit=True)
     anim.save(filename, fps=30, extra_args=['-vcodec', 'libx264'])
