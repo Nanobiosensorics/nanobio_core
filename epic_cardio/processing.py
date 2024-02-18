@@ -1,18 +1,33 @@
 from operator import itemgetter
 import numpy as np
+import os
 from nanobio_core.epic_cardio.data_correction import correct_well
 from nanobio_core.epic_cardio.cell_selector import WellArrayLineSelector
 from nanobio_core.epic_cardio.math_ops import calculate_cell_maximas
 from nanobio_core.epic_cardio.defs import WELL_NAMES
-from nanobio_core.epic_cardio.measurement_load import load_measurement, wl_map_to_wells
+from nanobio_core.epic_cardio.measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
+from nanobio_core.epic_cardio.defs import *
 
-class RangeType():
-    MEASUREMENT_PHASE=0
-    INDIVIDUAL_POINT=1
-
-def load_data(path):
+def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL):
+    
     # Betölti a 3x4-es well képet a projekt mappából.
     wl_map, time = load_measurement(path)
+        
+    if measurement_type == MeasurementType.TYPE_HIGH_FREQ:
+        h_paths = [ (p, os.path.join(path, p), int(p.split('_')[0][6:])) for p in os.listdir(path) if "Cardio" in p]
+        h_paths = sorted(h_paths, key=lambda x: x[2])
+        
+        print(h_paths)
+            
+        for name, path, idx in h_paths:
+            wl_map_h, time_h = load_high_freq_measurement(path)
+            
+            wl_map_h -= wl_map_h[0]
+            wl_map_h += wl_map[-1]
+                
+            wl_map = np.concatenate([wl_map, wl_map_h])
+            time = np.concatenate([time, time_h[:-1] + 100 + time[-1]])
+            
     # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.
     wells = wl_map_to_wells(wl_map, flip=True)
     phases = list(np.where((np.diff(time)) > 60)[0] + 1)
