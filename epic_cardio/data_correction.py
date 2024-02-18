@@ -91,7 +91,7 @@ def correct_well(well, threshold = 75, coords=[], mode='mean'):
     corr_data[np.abs(corr_data) > 5000] = 0
     corr_data[:, mask] = 0
     
-    return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1]))
+    return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1])), mask
 
 class WellArrayBackgroundSelector:
     # Jelkiválasztó
