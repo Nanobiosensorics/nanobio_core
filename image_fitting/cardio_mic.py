@@ -33,13 +33,16 @@ class CardioMicFitter:
                     self.translation = np.array([obj["t_0"], obj["t_1"]])
         
         img = well.copy()
-        img[img < 0] = 0
+        
+        if len(img.shape) > 2:
+            img = np.max(img, axis=0)
+            
         self.max_well = img
         self._mic, self._well = mic, cv2.resize(self.max_well, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
         
         self._fig, self._ax = plt.subplots(figsize=(16, 8))
         self._ax.set_axis_off()
-        self._im = self._ax.imshow(self._mic, cmap='gray') # , vmin = np.min(self._well), vmax = np.max(self._well)
+        self._im = self._ax.imshow(self._mic, cmap='gray', vmin = 0, vmax = np.max(self._well))
         self._elm = self._ax.imshow(self._well, alpha=.4,
                     extent = [self.translation[0], self.translation[0]  + self._well.shape[0],
                                                self.translation[1] + self._well.shape[1], self.translation[1]],)
@@ -190,7 +193,10 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
             self.closed = True
         else:        
             img = self._wells_data[self._ids[self._well_id]].copy()
-            img[img < 0] = 0
+            
+            if len(img.shape) > 2:
+                img = np.max(img, axis=0)
+                
             self._well = cv2.resize(img, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
             self._mic = self._mics_data[self._ids[self._well_id]]
             if hasattr(self, '_im'):
