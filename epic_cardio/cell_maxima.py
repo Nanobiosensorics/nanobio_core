@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import cv2
 from .data_correction import corr_data
 
-def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_size=5):
+def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_size=5, error_mask=None):
     '''
         Finding local maximum points on a frame.
         
@@ -14,22 +14,22 @@ def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_s
         ----------
         frame - the selected image
     '''
-    # import scipy
-    # import scipy.ndimage as ndimage
-    # import scipy.ndimage.filters as filters
-    # import numpy as np
     
     data = frame
 
-    data_max = filters.maximum_filter(data, neighborhood_size)
+    data_max = ndimage.maximum_filter(data, neighborhood_size)
     maxima = (data == data_max)
-    data_min = filters.minimum_filter(data, neighborhood_size)
+    data_min = ndimage.minimum_filter(data, neighborhood_size)
     diff = np.logical_and(((data_max - data_min) > min_threshold),((data_max - data_min) < max_threshold))
-#     diff = (data_max - data_min) > min_threshold
     maxima[diff == 0] = 0
+    
+    if error_mask is not None:
+        error_distance = ndimage.distance_transform_edt(np.logical_not(error_mask))
+        maxima[np.logical_and(error_distance <= 2, maxima == 1)] = 0
 
     labeled, num_objects = ndimage.label(maxima)
     slices = ndimage.find_objects(labeled)
+    
     x, y = [], []
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1)/2

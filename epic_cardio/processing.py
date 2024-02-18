@@ -56,7 +56,7 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
         #     breakdowns[name] = peak_until
         
         well_tmp = well_tmp[slicer]
-        well_corr, coords = correct_well(well_tmp, 
+        well_corr, coords, _ = correct_well(well_tmp, 
                                         threshold=preprocessing_params['drift_correction']['threshold'],
                                         mode=preprocessing_params['drift_correction']['filter_method'])
         well_data[name] = well_corr
@@ -72,7 +72,7 @@ def localization(preprocessing_params, localization_params, wells, selected_rang
         print("Parsing", name, end='\r')
         well_tmp = wells[name]
         well_tmp = well_tmp[slicer]
-        well_corr, filter_ptss = correct_well(well_tmp, 
+        well_corr, filter_ptss, mask = correct_well(well_tmp, 
                                             coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
                                             threshold=preprocessing_params['drift_correction']['threshold'],
                                             mode=preprocessing_params['drift_correction']['filter_method'])
@@ -80,7 +80,8 @@ def localization(preprocessing_params, localization_params, wells, selected_rang
         ptss = calculate_cell_maximas(well_corr, 
                     min_threshold=localization_params['threshold_range'][0], 
                     max_threshold=localization_params['threshold_range'][1], 
-                    neighborhood_size=localization_params['neighbourhood_size'])
+                    neighborhood_size=localization_params['neighbourhood_size'],
+                    error_mask=None if not localization_params['error_mask_filtering'] else mask)
         well_data[name] = (well_corr, ptss, filter_ptss)
     print("Parsing finished!")
     return well_data
