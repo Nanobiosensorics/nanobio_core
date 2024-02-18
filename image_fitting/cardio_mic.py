@@ -45,7 +45,7 @@ class CardioMicFitter:
         self._im = self._ax.imshow(self._mic, cmap='gray', vmin = 0, vmax = np.max(self._well))
         self._elm = self._ax.imshow(self._well, alpha=.4,
                     extent = [self.translation[0], self.translation[0]  + self._well.shape[0],
-                                               self.translation[1] + self._well.shape[1], self.translation[1]],)
+                                               self.translation[1] + self._well.shape[1], self.translation[1]])
         self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
         self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
@@ -202,7 +202,10 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
             if hasattr(self, '_im'):
                 self._im.set_data(self._mic)
             if hasattr(self, '_elm'):
-                self._elm.set_data(self._well)
+                self._elm.remove()
+                self._elm = self._ax.imshow(self._well, alpha=.4,
+                    extent = [self.translation[0], self.translation[0]  + self._well.shape[0],
+                                               self.translation[1] + self._well.shape[1], self.translation[1]])
                 
     def make_title(self):
         self._ax.set_title(f'Well {self._ids[self._well_id]}, Current translation {self.translation}, speed {self.distance}')
