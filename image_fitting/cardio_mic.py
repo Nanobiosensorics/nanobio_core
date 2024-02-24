@@ -11,19 +11,21 @@ class CardioMicScaling:
     MIC_10X = 2134 * 0.9817
     MIC_20X = 2134 * 1.81
 
+
 class CardioMicFitter:
-    def __init__(self, well, mic, result_path, scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None):
+    def __init__(self, well, mic, result_path, points=[], scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None):
         self.name = name
         self.closed = False
         self.tuned = False
         self.save_params = save_params
-        self.cardio_points = [False, np.zeros((2,2))]
-        self.mic_points = [False, np.zeros((2,2))]
+        self.cardio_points = []
+        self.mic_points = []
         self._well_id = 0
         self.distance = 100
         self.result_path = result_path
         self.translation = np.array([1420, 955])
         self.scale, _ = CardioMicFitter._get_scale(scaling)
+        self.points = np.asarray(points)
         
         if load_params != None:
             if os.path.exists(load_params) and load_params.endswith("json"):
@@ -46,8 +48,8 @@ class CardioMicFitter:
         self._elm = self._ax.imshow(self._well, alpha=.4,
                     extent = [self.translation[0], self.translation[0]  + self._well.shape[0],
                                                self.translation[1] + self._well.shape[1], self.translation[1]])
-        self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
-        self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
+        self.pts1 = None
+        self.pts2 = None
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
         self._fig.canvas.mpl_connect('button_press_event', self.on_press)
         self.make_title()
@@ -79,6 +81,13 @@ class CardioMicFitter:
             
     def enter_pressed(self):
         self._ax.set_title(None)
+        
+        if len(self.points) > 0:
+            pixel_conv = self.scale / 80
+            self.points = (self.points + .5) * pixel_conv + self.translation
+            self._ax.scatter(self.points[:, 0], self.points[:, 1], s = int(pixel_conv / 4))
+            self._fig.canvas.draw()
+            
         self._fig.savefig(os.path.join(self.result_path, f'{"well" if self.name == None else self.name}_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
         if self.save_params:
             obj = {
@@ -95,6 +104,13 @@ class CardioMicFitter:
         
         plt.close(self._fig)
         self.closed = True
+    
+    def _remove_coordinates(self):
+        if self.pts1 is not None:
+            self.pts1.remove()
+            self.pts1 = None
+            self.pts2.remove()
+            self.pts2 = None
         
     def handle_key_press(self, evt):
         if self.tuned:
@@ -139,38 +155,48 @@ class CardioMicFitter:
                     self.next_pressed()        
                 elif evt.key == 'enter':
                     self.enter_pressed()
+        elif evt.key == 'r':
+            self.tuned = not self.tuned
+            self._remove_coordinates()
+            self.draw_plot()   
         else:
             if hasattr(evt, 'button'):
                 if evt.xdata != None and evt.ydata != None:
                     if evt.key == 'a':
-                        self.cardio_points[1][1 if self.cardio_points[0] else 0] = (evt.xdata, evt.ydata)
-                        self.cardio_points[0] = not self.cardio_points[0]
-                        self.pts1.set_xdata(self.cardio_points[1][:,0])
-                        self.pts1.set_ydata(self.cardio_points[1][:,1])
+                        self.cardio_points.append((evt.xdata, evt.ydata))
+                        if self.pts1 == None:
+                            self.pts1, = self._ax.plot([l[0] for l in self.cardio_points], [l[1] for l in self.cardio_points], 'bo')
+                        else:
+                            self.pts1.set_xdata([l[0] for l in self.cardio_points])
+                            self.pts1.set_ydata([l[1] for l in self.cardio_points])
                         self._fig.canvas.draw()
                     elif evt.key == 'd':
-                        self.mic_points[1][1 if self.mic_points[0] else 0] = (evt.xdata, evt.ydata)
-                        self.mic_points[0] = not self.mic_points[0]
-                        self.pts2.set_xdata(self.mic_points[1][:,0])
-                        self.pts2.set_ydata(self.mic_points[1][:,1])
+                        self.mic_points.append((evt.xdata, evt.ydata))
+                        if self.pts2 == None:
+                            self.pts2, = self._ax.plot([l[0] for l in self.mic_points], [l[1] for l in self.mic_points], 'ro')
+                        else:
+                            self.pts2.set_xdata([l[0] for l in self.mic_points])
+                            self.pts2.set_ydata([l[1] for l in self.mic_points])
                         self._fig.canvas.draw()
             elif evt.key == 't':
-                sc = euclidean(self.mic_points[1][0], self.mic_points[1][1]) / euclidean(self.cardio_points[1][0], self.cardio_points[1][1])
+                # sc = euclidean(self.mic_points[1][0], self.mic_points[1][1]) / euclidean(self.cardio_points[1][0], self.cardio_points[1][1])
+                self.cardio_points = np.asarray(self.cardio_points)
+                self.mic_points = np.asarray(self.mic_points)
+                distances = []
+                for i in range(0, len(self.cardio_points)):
+                    for j in range(i + 1, len(self.cardio_points)):
+                        distances.append(euclidean(self.mic_points[i], self.mic_points[j]) / 
+                                         euclidean(self.cardio_points[i], self.cardio_points[j]))
+                sc = np.mean(distances)
                 self.scale *= sc
                 self.scale = int(self.scale)
                 self._well = cv2.resize(self.max_well, (self.scale, self.scale), interpolation=cv2.INTER_NEAREST)
-                dist = (self.mic_points[1][0] - sc * self.cardio_points[1][0])
+                dist = np.mean(np.asarray([self.mic_points[i] - sc * self.cardio_points[i] for i in range(len(self.cardio_points))]), axis=0)
                 self.translation[0] += dist[0]
                 self.translation[1] += dist[1]
                 self.tuned = True
-                self.pts1.remove()
-                self.pts2.remove()
-                self.draw_plot()
-            elif evt.key == 'r':
-                self.tuned = True
-                self.pts1.remove()
-                self.pts2.remove()
-                self.draw_plot()                        
+                self._remove_coordinates()
+                self.draw_plot()                     
         
     def on_press(self, evt):
         self.handle_key_press(evt)
@@ -220,8 +246,7 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
         self._well_id += 1
         if not self.check_close():
             if self.retune:
-                self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
-                self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
+                self._remove_coordinates()
                 self.tuned = False
             self.plot_well()
             self.draw_plot() 
@@ -234,8 +259,7 @@ class CardioMicFitterMultipleWell(CardioMicFitter):
         
         if not self.check_close():
             if self.retune:
-                self.pts1, = self._ax.plot((0,0), (0,0), 'bo')
-                self.pts2, = self._ax.plot((0,0), (0,0), 'ro')
+                self._remove_coordinates()
                 self.tuned = False
             self.plot_well()
             self.draw_plot() 
