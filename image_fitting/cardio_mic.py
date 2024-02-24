@@ -11,7 +11,6 @@ class CardioMicScaling:
     MIC_10X = 2134 * 0.9817
     MIC_20X = 2134 * 1.81
 
-
 class CardioMicFitter:
     def __init__(self, well, mic, result_path, points=[], scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None):
         self.name = name
@@ -85,7 +84,10 @@ class CardioMicFitter:
         if len(self.points) > 0:
             pixel_conv = self.scale / 80
             self.points = (self.points + .5) * pixel_conv + self.translation
-            self._ax.scatter(self.points[:, 0], self.points[:, 1], s = int(pixel_conv / 4))
+            self._ax.scatter(self.points[:, 0], self.points[:, 1], s = int(pixel_conv / 4), c = 'r')
+            plt.rcParams.update({'font.size': 10})
+            for i in range(self.points.shape[0]):
+                self._ax.text(self.points[i, 0] + pixel_conv, self.points[i, 1] - pixel_conv, f"{i}", color="white")
             self._fig.canvas.draw()
             
         self._fig.savefig(os.path.join(self.result_path, f'{"well" if self.name == None else self.name}_cardio_microscope.png'), bbox_inches='tight', pad_inches=0)
