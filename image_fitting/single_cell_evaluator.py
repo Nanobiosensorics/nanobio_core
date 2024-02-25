@@ -10,6 +10,7 @@ import pandas as pd
 import json
 from skimage.segmentation import watershed
 from scipy import ndimage as ndi
+import cv2
 
 def dice_loss(y, p):
     return np.abs(1 - ((2*np.sum(y*p) + 1) / (np.sum(y) + np.sum(p) + 1)))
@@ -109,7 +110,7 @@ class CardioMicSingleCellEvaluator():
                                 self.selected_coords.append(i)
 
     @classmethod
-    def _get_cardio_centers(self, centers, im_pxs):
+    def _get_cardio_centers(cls, centers, im_pxs):
         cntrs= []
         for cnt in centers:
             px_center = im_pxs[int(cnt[1]), int(cnt[0])]
@@ -119,7 +120,7 @@ class CardioMicSingleCellEvaluator():
         return cntrs
 
     @classmethod
-    def _get_slicer(self, shape, scale, translation):
+    def _get_slicer(cls, shape, scale, translation):
         start_mic = np.array((max(translation[1], 0),
                     max(translation[0], 0)))
         end_mic = np.flipud((translation + scale))
@@ -131,7 +132,7 @@ class CardioMicSingleCellEvaluator():
         return cardio_slice, mic_slice
 
     @classmethod
-    def _transform_resolution(self, im_cardio, im_mic, im_markers, im_pxs, im_contour, im_watershed, centers, shape, resolution = 1):
+    def _transform_resolution(cls, im_cardio, im_mic, im_markers, im_pxs, im_contour, im_watershed, centers, shape, resolution = 1):
         if resolution == 1:
             return im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
 
@@ -168,7 +169,7 @@ class CardioMicSingleCellEvaluator():
         return im_cardio_tr, im_mic_tr, im_markers_tr, im_pxs_tr, im_contour_tr, im_watershed_tr, centers_tr
 
     @classmethod
-    def _single_cell_filtering(self, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
+    def _single_cell_filtering(cls, filter_params, well, im_cardio_sliced, im_markers, im_markers_sliced, im_pxs_sliced, translation, shape, px_size):
         now = datetime.now()
 
         markers_filter = im_markers_sliced.copy().astype(int)
@@ -194,7 +195,7 @@ class CardioMicSingleCellEvaluator():
         return markers_selected, im_markers_selected
 
     @classmethod
-    def _adjacent_filtering(self, filter_params, markers_selected_sc, im_markers_sliced, im_pxs_sliced):
+    def _adjacent_filtering(cls, filter_params, markers_selected_sc, im_markers_sliced, im_pxs_sliced):
         now = datetime.now()
 
         markers_filter = im_markers_sliced.copy().astype(int)
@@ -354,10 +355,10 @@ class CardioMicSingleCellEvaluator():
             cell_areas = np.zeros(len(self.selected_coords), dtype=np.float32)
             cell_mic_centers = np.zeros((len(self.selected_coords), 2), dtype=np.uint16)
             cell_cardio_centers = np.zeros((len(self.selected_coords), 2), dtype=np.uint8)
-            # cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
-            # cell_mics_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
-            # cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
-            # cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
+            cell_mics = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
+            cell_mics_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range, 3), dtype=np.uint8)
+            cell_markers = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
+            cell_markers_singular = np.zeros((len(self.selected_coords), 2*slaced_px_range, 2*slaced_px_range), dtype=np.uint16)
             cell_cardio = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
             cell_cover = np.zeros((len(self.selected_coords), self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
             cell_pred = []
@@ -386,18 +387,18 @@ class CardioMicSingleCellEvaluator():
                 ranges = ((max(cell_center[1] - slaced_px_range, 0), min(cell_center[1] + slaced_px_range, self.im_mic.shape[0])),
                           (max(cell_center[0] - slaced_px_range, 0), min(cell_center[0] + slaced_px_range, self.im_mic.shape[1])))
                 mic_slice = (slice(*ranges[0]), slice(*ranges[1]))
-                # mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
+                mic_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
                 ranges = ((max(cardio_center[1] - px_range, 0), min(cardio_center[1] + px_range, self.well.shape[1])),
                           (max(cardio_center[0] - px_range, 0), min(cardio_center[0] + px_range, self.well.shape[2])))
                 cardio_slice = (slice(*ranges[0]), slice(*ranges[1]))
                 cardio_slice_proj = (slice(0, ranges[0][1] - ranges[0][0]), slice(0, ranges[1][1] - ranges[1][0]))
 
-                # cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
-                # cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
-                # cell_mics_singular[i] = cell_mics[i].copy()
-                # cell_mics_singular[i][cell_markers[i] != cell_id] = 0
-                # cell_markers_singular[i] = cell_markers[i] == cell_id
+                cell_mics[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_mic[mic_slice[0], mic_slice[1]]
+                cell_markers[i, mic_slice_proj[0], mic_slice_proj[1]] = self.im_markers[mic_slice[0], mic_slice[1]]
+                cell_mics_singular[i] = cell_mics[i].copy()
+                cell_mics_singular[i][cell_markers[i] != cell_id] = 0
+                cell_markers_singular[i] = cell_markers[i] == cell_id
 
                 cardio_im = np.zeros((self.well.shape[0], 2*px_range, 2*px_range), dtype=np.float32)
                 cardio_im[:, cardio_slice_proj[0], cardio_slice_proj[1]] = self.well[:, cardio_slice[0], cardio_slice[1]]
@@ -440,13 +441,14 @@ class CardioMicSingleCellEvaluator():
             pd.DataFrame(cell_areas).to_csv(os.path.join(path, f'{well_id}_areas.csv'))
             pd.DataFrame(cell_mic_centers).to_csv(os.path.join(path, f'{well_id}_mic_centers.csv'))
             pd.DataFrame(cell_cardio_centers).to_csv(os.path.join(path, f'{well_id}_cardio_centers.csv'))
-            # np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover,
-            #          mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular)
+            print(cell_mics.shape)
+            np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover, cardio_pred=cell_pred,
+                     mic=cell_mics, mic_singular=cell_mics_singular, marker=cell_markers, marker_singular=cell_markers_singular, well=self.well, im_markers=self.im_markers, im_mic=self.im_mic)
 
             # print(cell_cardio.shape, cell_cover.shape, cell_pred.shape, cell_watershed.shape)
-            np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover, cardio_pred=cell_pred)
+            # np.savez(os.path.join(path, f'{well_id}_seg.npz'), time=self.time, cardio=cell_cardio, cardio_watershed=cell_watershed, cardio_cover=cell_cover, cardio_pred=cell_pred)
 
-            sel_path = os.path.join(path, '.metadata')
+            sel_path = os.path.join(path, 'metadata')
             if not os.path.exists(sel_path):
                 os.makedirs(sel_path)
 
