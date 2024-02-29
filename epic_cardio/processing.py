@@ -23,11 +23,14 @@ def load_data(path):
 
 def load_params(path):
     filter_params = {}
+    preprocessing, localization = {}, {}
     if os.path.exists(os.path.join(path, '.metadata/parameters.json')):
         with open(os.path.join(path, '.metadata/parameters.json'), 'r') as f:
             obj = json.load(f)
             filter_params = obj['filter_ptss']
-    return filter_params
+            preprocessing = obj['preprocessing']
+            localization = obj['localization']
+    return filter_params, preprocessing, localization
 
 def save_params(path, well_data, preprocessing, localization):
     if not os.path.exists(os.path.join(path, '.metadata')):
@@ -39,11 +42,24 @@ def save_params(path, well_data, preprocessing, localization):
         }
         with open(os.path.join(path, '.metadata/parameters.json'), 'w+') as f:
             json.dump(parameters, f)
-    
+
 
 def preprocessing(preprocessing_params, wells, time, phases, background_coords={}):
     well_data = {}
     filter_ptss = {}
+    
+    if len(preprocessing_params) == 0:
+        preprocessing_params = {
+            'signal_range' : {
+                'range_type': RangeType.MEASUREMENT_PHASE,
+                'ranges': [0, None],
+            },
+            'drift_correction': {
+                'threshold': 75,
+                'filter_method': 'mean',
+                'background_selector': True,
+            }
+        }
     
     rngs = preprocessing_params['signal_range']['ranges']
     if rngs[1] != None:
