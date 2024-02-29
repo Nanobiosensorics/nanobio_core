@@ -1,10 +1,12 @@
 from operator import itemgetter
 import numpy as np
+import os
 from nanobio_core.epic_cardio.data_correction import correct_well
 from nanobio_core.epic_cardio.cell_selector import WellArrayLineSelector
 from nanobio_core.epic_cardio.math_ops import calculate_cell_maximas
 from nanobio_core.epic_cardio.defs import WELL_NAMES
 from nanobio_core.epic_cardio.measurement_load import load_measurement, wl_map_to_wells
+import json
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -18,6 +20,26 @@ def load_data(path):
     phases = list(np.where((np.diff(time)) > 60)[0] + 1)
     print([(n+1, p) for n, p in enumerate(phases)])
     return wells, time, phases
+
+def load_params(path):
+    filter_params = {}
+    if os.path.exists(os.path.join(path, '.metadata/parameters.json')):
+        with open(os.path.join(path, '.metadata/parameters.json'), 'r') as f:
+            obj = json.load(f)
+            filter_params = obj['filter_ptss']
+    return filter_params
+
+def save_params(path, well_data, preprocessing, localization):
+    if not os.path.exists(os.path.join(path, '.metadata')):
+        os.mkdir(os.path.join(path, '.metadata'))
+        parameters = {
+            'filter_ptss' : { key: value[-1] for key, value in well_data.items()},
+            'preprocessing': preprocessing,
+            'localization': localization
+        }
+        with open(os.path.join(path, '.metadata/parameters.json'), 'w+') as f:
+            json.dump(parameters, f)
+    
 
 def preprocessing(preprocessing_params, wells, time, phases, background_coords={}):
     well_data = {}
@@ -57,6 +79,7 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
         
         well_tmp = well_tmp[slicer]
         well_corr, coords, _ = correct_well(well_tmp, 
+                                        coords=[] if len(background_coords) == 0 else background_coords[name],
                                         threshold=preprocessing_params['drift_correction']['threshold'],
                                         mode=preprocessing_params['drift_correction']['filter_method'])
         well_data[name] = well_corr
