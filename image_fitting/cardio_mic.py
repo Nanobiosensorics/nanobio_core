@@ -12,7 +12,7 @@ class CardioMicScaling:
     MIC_20X = 2134 * 1.81
 
 class CardioMicFitter:
-    def __init__(self, well, mic, result_path, points=[], scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None):
+    def __init__(self, well, mic, result_path, points=[], scaling=CardioMicScaling.MIC_5X, block=True, save_params=False, load_params=None, name=None, show_scatter=False):
         self.name = name
         self.closed = False
         self.tuned = False
@@ -25,6 +25,7 @@ class CardioMicFitter:
         self.translation = np.array([1420, 955])
         self.scale, _ = CardioMicFitter._get_scale(scaling)
         self.points = np.asarray(points)
+        self.show_scatter = show_scatter
         
         if load_params != None:
             if os.path.exists(load_params) and load_params.endswith("json"):
@@ -80,11 +81,12 @@ class CardioMicFitter:
             
     def enter_pressed(self):
         self._ax.set_title(None)
-        
+        print(self.points)
         if len(self.points) > 0:
             pixel_conv = self.scale / 80
             self.points = (self.points + .5) * pixel_conv + self.translation
-            self._ax.scatter(self.points[:, 0], self.points[:, 1], s = int(pixel_conv / 4), c = 'r')
+            if self.show_scatter:
+                self._ax.scatter(self.points[:, 0], self.points[:, 1], s = int(pixel_conv / 4), c = 'r')
             plt.rcParams.update({'font.size': 10})
             for i in range(self.points.shape[0]):
                 self._ax.text(self.points[i, 0] + pixel_conv, self.points[i, 1] - pixel_conv, f"{i}", color="white")
@@ -111,11 +113,18 @@ class CardioMicFitter:
         if self.pts1 is not None:
             self.pts1.remove()
             self.pts1 = None
+        if self.pts2 is not None:
             self.pts2.remove()
             self.pts2 = None
         
     def handle_key_press(self, evt):
-        if self.tuned:
+        if evt.key == 'r':
+            self.tuned = not self.tuned
+            self.cardio_points = []
+            self.mic_points = []
+            self._remove_coordinates()
+            self.draw_plot()   
+        elif self.tuned:
             if evt.key == 'm' and hasattr(evt, 'button'):
                 if evt.xdata != None and evt.ydata != None:
                     self.translation[0] = round(evt.xdata)
@@ -157,10 +166,6 @@ class CardioMicFitter:
                     self.next_pressed()        
                 elif evt.key == 'enter':
                     self.enter_pressed()
-        elif evt.key == 'r':
-            self.tuned = not self.tuned
-            self._remove_coordinates()
-            self.draw_plot()   
         else:
             if hasattr(evt, 'button'):
                 if evt.xdata != None and evt.ydata != None:
