@@ -12,11 +12,11 @@ class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
 
-def load_data(path):
+def load_data(path, flip=True):
     # Betölti a 3x4-es well képet a projekt mappából.
     wl_map, time = load_measurement(path)
     # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.
-    wells = wl_map_to_wells(wl_map, flip=True)
+    wells = wl_map_to_wells(wl_map, flip=flip)
     phases = list(np.where((np.diff(time)) > 60)[0] + 1)
     print([(n+1, p) for n, p in enumerate(phases)])
     return wells, time, phases
@@ -35,13 +35,13 @@ def load_params(path):
 def save_params(path, well_data, preprocessing, localization):
     if not os.path.exists(os.path.join(path, '.metadata')):
         os.mkdir(os.path.join(path, '.metadata'))
-        parameters = {
-            'filter_ptss' : { key: value[-1] for key, value in well_data.items()},
-            'preprocessing': preprocessing,
-            'localization': localization
-        }
-        with open(os.path.join(path, '.metadata/parameters.json'), 'w+') as f:
-            json.dump(parameters, f)
+    parameters = {
+        'filter_ptss' : { key: value[-1] for key, value in well_data.items()},
+        'preprocessing': preprocessing,
+        'localization': localization
+    }
+    with open(os.path.join(path, '.metadata/parameters.json'), 'w+') as f:
+        json.dump(parameters, f)
 
 
 def preprocessing(preprocessing_params, wells, time, phases, background_coords={}):
