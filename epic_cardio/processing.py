@@ -12,7 +12,7 @@ class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
 
-def load_data(path, flip=True):
+def load_data(path, flip=[False, False]):
     # Betölti a 3x4-es well képet a projekt mappából.
     wl_map, time = load_measurement(path)
     # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.

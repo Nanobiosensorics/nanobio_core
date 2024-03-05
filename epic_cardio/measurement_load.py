@@ -195,10 +195,11 @@ def load_measurement_384w(dir_path):
     print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
 
-def wl_map_to_wells(wl_map, flip=False):
+def wl_map_to_wells(wl_map, flip=[False, False]):
     WIDTH = 80
     WELL_IDS = [['C1', 'C2', 'C3', 'C4'], ['B1', 'B2', 'B3', 'B4'], ['A1', 'A2', 'A3', 'A4']]
-    return {name: np.flip(wl_map[:, i : i+WIDTH, j:j+WIDTH], axis=2) if flip else wl_map[:, i : i+WIDTH, j:j+WIDTH] 
+    flip_axis = list(np.where(np.array(flip) == True)[0] + 1)
+    return {name: np.flip(wl_map[:, i : i+WIDTH, j:j+WIDTH], axis=flip_axis) if len(flip_axis) > 0 else wl_map[:, i : i+WIDTH, j:j+WIDTH] 
             for names, i in zip(WELL_IDS, range(0, 240, WIDTH)) for name, j in zip(names, range(0, 320, WIDTH))}
 
 def wl_map_to_wells_384w(wl_map, flip=False, padding = 4):
