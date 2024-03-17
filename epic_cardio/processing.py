@@ -18,15 +18,18 @@ def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL):
         h_paths = sorted(h_paths, key=lambda x: x[2])
         
         print(h_paths)
-            
         for name, path, idx in h_paths:
             wl_map_h, time_h = load_high_freq_measurement(path)
             
             wl_map_h -= wl_map_h[0]
-            wl_map_h += wl_map[-1]
                 
-            wl_map = np.concatenate([wl_map, wl_map_h])
-            time = np.concatenate([time, time_h[:-1] + 100 + time[-1]])
+            if wl_map is None:
+                wl_map = wl_map_h
+                time = time_h
+            else:
+                wl_map_h += np.mean(wl_map[-50:], axis=0)
+                wl_map = np.concatenate([wl_map, wl_map_h])
+                time = np.concatenate([time, time_h[:-1] + 100 + time[-1]])
             
     # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.
     wells = wl_map_to_wells(wl_map, flip=True)
