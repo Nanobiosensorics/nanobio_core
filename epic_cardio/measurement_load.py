@@ -19,7 +19,7 @@ def load_measurement(dir_path):
     
     if len(files) == 0:
         print("Missing test wl power file!!!")
-        return None
+        return None, None
     
     wl_power_path = os.path.join(dir_path, files[0])
     
@@ -27,7 +27,7 @@ def load_measurement(dir_path):
     
     if len(files) == 0:
         print("Missing test avg!!!")
-        return None
+        return None, None
     
     avg_path = os.path.join(dir_path, files[0])
     
@@ -110,7 +110,7 @@ def load_high_freq_measurement(dir_path):
     time = []
     time = pd.read_table(avg_path, skiprows=1, decimal=',')
     time = np.asarray(time.iloc[:,0])
-    print(f"Measurement loaded {WL_map.shape} time {time.shape}")
+    # print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
 
 def load_measurement_bt(dir_path):
