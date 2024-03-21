@@ -15,7 +15,7 @@ def load_measurement(dir_path):
         dir_path: the path to the folder
     '''
     S = 0.0002
-    files = [ obj for obj in os.listdir(dir_path) if '_test_wl_power' in obj.lower()]
+    files = [ obj for obj in os.listdir(dir_path) if '_wl_power' in obj.lower()]
     
     if len(files) == 0:
         print("Missing test wl power file!!!")
