@@ -41,7 +41,7 @@ def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL, flip=[False, F
         phases = list(np.where((np.diff(time)) > 60)[0] + 1)
         print([(n+1, p) for n, p in enumerate(phases)])
         return wells, time, phases
-    except TypeError as e:
+    except Exception as e:
         print(f'Error occured during data load: {e}')
         return None
 
