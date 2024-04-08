@@ -14,33 +14,36 @@ class RangeType():
     INDIVIDUAL_POINT=1
 
 def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL, flip=[False, False]):
-    
-    # Betölti a 3x4-es well képet a projekt mappából.
-    wl_map, time = load_measurement(path)
-        
-    if measurement_type == MeasurementType.TYPE_HIGH_FREQ:
-        h_paths = [ (p, os.path.join(path, p), int(p.split('_')[0][6:])) for p in os.listdir(path) if "Cardio" in p]
-        h_paths = sorted(h_paths, key=lambda x: x[2])
-        
-        print(h_paths)
-        for name, path, idx in h_paths:
-            wl_map_h, time_h = load_high_freq_measurement(path)
+    try:
+        # Betölti a 3x4-es well képet a projekt mappából.
+        wl_map, time = load_measurement(path)
             
-            wl_map_h -= wl_map_h[0]
+        if measurement_type == MeasurementType.TYPE_HIGH_FREQ:
+            h_paths = [ (p, os.path.join(path, p), int(p.split('_')[0][6:])) for p in os.listdir(path) if "Cardio" in p]
+            h_paths = sorted(h_paths, key=lambda x: x[2])
+            
+            print(h_paths)
+            for name, path, idx in h_paths:
+                wl_map_h, time_h = load_high_freq_measurement(path)
                 
-            if wl_map is None:
-                wl_map = wl_map_h
-                time = time_h
-            else:
-                wl_map_h += np.mean(wl_map[-50:], axis=0)
-                wl_map = np.concatenate([wl_map, wl_map_h])
-                time = np.concatenate([time, time_h[:-1] + 100 + time[-1]])
-            
-    # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.
-    wells = wl_map_to_wells(wl_map, flip=flip)
-    phases = list(np.where((np.diff(time)) > 60)[0] + 1)
-    print([(n+1, p) for n, p in enumerate(phases)])
-    return wells, time, phases
+                wl_map_h -= wl_map_h[0]
+                    
+                if wl_map is None:
+                    wl_map = wl_map_h
+                    time = time_h
+                else:
+                    wl_map_h += np.mean(wl_map[-50:], axis=0)
+                    wl_map = np.concatenate([wl_map, wl_map_h])
+                    time = np.concatenate([time, time_h[:-1] + 100 + time[-1]])
+                
+        # Itt szétválasztásra kerülnek a wellek. Betöltéskor egy 240x320-as képen található a 3x4 elrendezésű 12 well.
+        wells = wl_map_to_wells(wl_map, flip=flip)
+        phases = list(np.where((np.diff(time)) > 60)[0] + 1)
+        print([(n+1, p) for n, p in enumerate(phases)])
+        return wells, time, phases
+    except TypeError as e:
+        print(f'Error occured during data load: {e}')
+        return None
 
 def load_params(path):
     filter_params = {}

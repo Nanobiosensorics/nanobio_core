@@ -42,6 +42,11 @@ def load_measurement(dir_path):
     fr.close()
 
     sorted_files = os.listdir(os.path.join(dir_path, 'DMR'))
+    
+    if len(sorted_files) <= 0:
+        print('DMR folder is empty!');
+        return None 
+    
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),240,320])
@@ -96,6 +101,11 @@ def load_high_freq_measurement(dir_path):
     fr.close()
 
     sorted_files = os.listdir(os.path.join(dir_path, 'fDMR'))
+    
+    if len(sorted_files) <= 0:
+        print('DMR folder is empty!');
+        return None 
+    
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),240,320])
@@ -125,6 +135,11 @@ def load_measurement_bt(dir_path):
     fr.close()
 
     sorted_files = os.listdir(dir_path + '/DMR')
+    
+    if len(sorted_files) <= 0:
+        print('DMR folder is empty!');
+        return None 
+    
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),240,360])
@@ -175,6 +190,11 @@ def load_measurement_384w(dir_path):
     fr.close()
 
     sorted_files = os.listdir(os.path.join(dir_path, 'DMR'))
+    
+    if len(sorted_files) <= 0:
+        print('DMR folder is empty!');
+        return None 
+    
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),480,720])
