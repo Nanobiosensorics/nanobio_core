@@ -59,8 +59,11 @@ def load_measurement(dir_path):
     WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
 
     time = []
-    time = pd.read_table(avg_path, skiprows=1, decimal=',')
-    time = np.asarray(time.iloc[:,0]) * 60
+    try:
+        time = pd.read_table(avg_path, skiprows=1, decimal=',')
+        time = np.asarray(time.iloc[:,0]) * 60
+    except Exception as e:
+        time = np.linspace(0, WL_map.shape[0] * 9, WL_map.shape[0])
     print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
 
