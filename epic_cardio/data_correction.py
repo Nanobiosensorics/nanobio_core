@@ -3,7 +3,6 @@ from scipy.ndimage import distance_transform_edt
 from scipy import ndimage
 import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('Qt5Agg')
 
 def corr_data(data):
     corr_data = data.copy()
