@@ -7,52 +7,6 @@ import numpy as np
 :param epsilon: pairwise consistency threshold.
 :param correspondence_ratio: the percentage of random correspondence vector samples.
 """
-def find_translation_pmc(source_points: np.ndarray, target_points: np.ndarray, epsilon: float, correspondence_ratio: float = 1):
-  def __find_clique(candidates: np.ndarray, removed: np.ndarray, coloring: np.ndarray):
-    nonlocal best_clique
-    nonlocal current_clique
-
-    # Selecting the branches which needs to be evaluated.
-    required_candidates = __get_required_candidates(candidates, removed, adjacency_list)
-
-    i = len(candidates) - 1
-    while i >= 0:
-      # If can't achieve bigger clique then cut this branch.
-      if (len(current_clique) + np.max(coloring)) <= len(best_clique):
-        return
-
-      node = candidates[i]
-      if node in required_candidates:
-        current_clique = np.append(current_clique, node)
-
-        new_candidates = np.intersect1d(candidates, adjacency_list[node])
-        if len(new_candidates) > 0:
-          new_removed = np.intersect1d(removed, adjacency_list[node])
-          new_coloring = __get_coloring_greedy(new_candidates, adjacency_list)
-          __find_clique(new_candidates, new_removed, new_coloring)
-        elif len(current_clique) > len(best_clique):
-          best_clique = current_clique
-        
-        current_clique = current_clique[:-1]
-        candidates = candidates[candidates != node]
-        removed = np.append(removed, node)
-
-        coloring = __update_coloring(coloring, i)
-      
-      i -= 1
-
-  # Build the graph out of selected indices.
-  correspondence_vectors, adjacency_list = __build_graph(source_points, target_points, epsilon, correspondence_ratio)
-
-  # Sort the candidates in decreasing degree to minimize branching.
-  candidates = np.argsort([len(x) for x in adjacency_list])[::-1].astype(np.uint16)
-
-  # Finding the maximal clique.
-  current_clique, best_clique = [], []
-  __find_clique(candidates, np.array([], dtype=np.uint16), __get_coloring_greedy(candidates, adjacency_list))
-
-  return np.average(correspondence_vectors[np.array(best_clique, dtype=np.uint16)], axis=0), len(best_clique)
-
 
 # Builds a graph out of correspodence vectors between source and target points with epsilon maximal threshold.
 def __build_graph(source_points: np.ndarray, target_points: np.ndarray, epsilon: float, correspondence_ratio: float):
@@ -116,3 +70,48 @@ def __update_coloring(coloring: np.ndarray, id: int):
     coloring[coloring > value] -= 1
     return coloring
 
+def find_translation_pmc(source_points: np.ndarray, target_points: np.ndarray, epsilon: float, correspondence_ratio: float = 1):
+  def __find_clique(candidates: np.ndarray, removed: np.ndarray, coloring: np.ndarray):
+    nonlocal best_clique
+    nonlocal current_clique
+
+    # Selecting the branches which needs to be evaluated.
+    required_candidates = __get_required_candidates(candidates, removed, adjacency_list)
+
+    i = len(candidates) - 1
+    while i >= 0:
+      # If can't achieve bigger clique then cut this branch.
+      if (len(current_clique) + np.max(coloring)) <= len(best_clique):
+        return
+
+      node = candidates[i]
+      if node in required_candidates:
+        current_clique = np.append(current_clique, node)
+
+        new_candidates = np.intersect1d(candidates, adjacency_list[node])
+        if len(new_candidates) > 0:
+          new_removed = np.intersect1d(removed, adjacency_list[node])
+          new_coloring = __get_coloring_greedy(new_candidates, adjacency_list)
+          __find_clique(new_candidates, new_removed, new_coloring)
+        elif len(current_clique) > len(best_clique):
+          best_clique = current_clique
+        
+        current_clique = current_clique[:-1]
+        candidates = candidates[candidates != node]
+        removed = np.append(removed, node)
+
+        coloring = __update_coloring(coloring, i)
+      
+      i -= 1
+
+  # Build the graph out of selected indices.
+  correspondence_vectors, adjacency_list = __build_graph(source_points, target_points, epsilon, correspondence_ratio)
+
+  # Sort the candidates in decreasing degree to minimize branching.
+  candidates = np.argsort([len(x) for x in adjacency_list])[::-1].astype(np.uint16)
+
+  # Finding the maximal clique.
+  current_clique, best_clique = [], []
+  __find_clique(candidates, np.array([], dtype=np.uint16), __get_coloring_greedy(candidates, adjacency_list))
+
+  return np.average(correspondence_vectors[np.array(best_clique, dtype=np.uint16)], axis=0), len(best_clique)
