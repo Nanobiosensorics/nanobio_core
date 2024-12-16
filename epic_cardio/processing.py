@@ -86,6 +86,7 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
                 'threshold': 75,
                 'filter_method': 'mean',
                 'background_selector': True,
+                'inter_phase_correction': False
             }
         }
     
@@ -139,7 +140,7 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
         print("Parsing", name)
         well_tmp = wells[name]
         
-        if preprocessing_params['drift_correction']['inter_phase']:
+        if preprocessing_params['drift_correction']['inter_phase_correction']:
             print(name, ':', end=' ')
             well_tmp = correct_interphase_well_shifts(well_tmp, phases, 
                                             coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
