@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 import os
-from nanobio_core.epic_cardio.data_correction import correct_well
+from nanobio_core.epic_cardio.data_correction import correct_well, correct_interphase_well_shifts
 from nanobio_core.epic_cardio.cell_selector import WellArrayLineSelector
 from nanobio_core.epic_cardio.math_ops import calculate_cell_maximas
 from nanobio_core.epic_cardio.defs import WELL_NAMES
@@ -131,13 +131,22 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
     print("Parsing finished!")
     return well_data, time, phases, filter_ptss, selected_range
 
-def localization(preprocessing_params, localization_params, wells, selected_range, background_coords={}):
+def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
     # Sejt szűrés a wellekből.
     well_data = {}
     slicer = slice(selected_range[0], selected_range[1])
     for name in WELL_NAMES:
-        print("Parsing", name, end='\r')
+        print("Parsing", name)
         well_tmp = wells[name]
+        
+        if preprocessing_params['drift_correction']['inter_phase']:
+            print(name, ':', end=' ')
+            well_tmp = correct_interphase_well_shifts(well_tmp, phases, 
+                                            coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
+                                            threshold=preprocessing_params['drift_correction']['threshold'],
+                                            mode=preprocessing_params['drift_correction']['filter_method'])
+            print()
+        
         well_tmp = well_tmp[slicer]
         well_corr, filter_ptss, mask = correct_well(well_tmp, 
                                             coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],

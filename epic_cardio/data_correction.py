@@ -3,6 +3,9 @@ from scipy.ndimage import distance_transform_edt
 from scipy import ndimage
 import matplotlib
 import matplotlib.pyplot as plt
+from skimage.morphology import h_maxima
+from nanobio_core.alignment import find_translation_pmc
+
 
 def corr_data(data):
     corr_data = data.copy()
@@ -89,8 +92,53 @@ def correct_well(well, threshold = 75, coords=[], mode='mean'):
         print('Could not perform random background correction!')
     corr_data[np.abs(corr_data) > 5000] = 0
     corr_data[:, mask] = 0
+    corr_data = np.clip(corr_data, 0, np.max(corr_data))
     
     return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1])), mask
+
+def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode):
+    shifted_well = raw_well.copy()
+    well = raw_well.copy()
+    well, filter_ptss, mask = correct_well(well, 
+                                        coords=coords,
+                                        threshold=threshold,
+                                        mode=mode)
+    for phase in phases:
+        well = np.clip(well, 0, np.max(well))
+        well_mx1 = well[phase - 1]
+        well_mx2 = well[phase]
+        if np.max(well_mx1) < threshold or np.max(well_mx2) < threshold:
+            continue
+        
+        coords1 = np.flip(np.argwhere(h_maxima(well_mx1, threshold)))
+        coords2 = np.flip(np.argwhere(h_maxima(well_mx2, threshold)))
+        
+        if len(coords1) < 5 or len(coords2) < 5:
+            continue
+        
+        translation = find_translation_pmc(coords1, coords2, 1)[0].astype(int)
+        print(phase, len(coords1), len(coords2), translation, end=' ')
+        
+        # Create meshgrid
+        x, y = np.meshgrid(np.arange(well_mx1.shape[1]), np.arange(well_mx1.shape[0]))
+
+        # Apply translation
+        x_shifted = x + translation[0]
+        y_shifted = y + translation[1]
+
+        # Ensure indices are within bounds
+        x_shifted = np.clip(x_shifted, 0, well.shape[2] - 1)
+        y_shifted = np.clip(y_shifted, 0, well.shape[1] - 1)
+        
+        padding_mask = np.ones_like(well_mx1, dtype=bool)
+        padding_mask[y_shifted, x_shifted] = False
+        
+        for i in range(phase):
+            tmp = shifted_well[i].copy()
+            shifted_well[i] = 0
+            shifted_well[i, y_shifted, x_shifted] = tmp
+        shifted_well[:, padding_mask] = 0
+    return shifted_well
 
 class WellArrayBackgroundSelector:
     # Jelkiválasztó
