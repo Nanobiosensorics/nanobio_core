@@ -4,7 +4,14 @@ import scipy.ndimage.filters as filters
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from .data_correction import corr_data
+
+def corr_data(data):
+    corr_data = data.copy()
+    for n in range(0, corr_data.shape[0]):
+        corr_data[n, :] -= corr_data[n, 1] - corr_data[n, 0]
+    for n in range(0, corr_data.shape[0]):
+        corr_data[n, :] -= corr_data[n, 0]
+    return corr_data
 
 def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_size=5, error_mask=None):
     '''

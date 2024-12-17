@@ -3,17 +3,8 @@ from scipy.ndimage import distance_transform_edt
 from scipy import ndimage
 import matplotlib
 import matplotlib.pyplot as plt
-from skimage.morphology import h_maxima
-from nanobio_core.alignment import find_translation_pmc
-
-
-def corr_data(data):
-    corr_data = data.copy()
-    for n in range(0, corr_data.shape[0]):
-        corr_data[n, :] -= corr_data[n, 1] - corr_data[n, 0]
-    for n in range(0, corr_data.shape[0]):
-        corr_data[n, :] -= corr_data[n, 0]
-    return corr_data
+from nanobio_core.alignment import find_translation_pmc, find_translation_stochastic
+from .math_ops import find_local_maxima
 
 def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5, layer=0):
     # Get the indices of the true elements in the boolean array
@@ -104,20 +95,22 @@ def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode):
                                         threshold=threshold,
                                         mode=mode)
     for phase in phases:
+        print(phase, end=' ')
         well = np.clip(well, 0, np.max(well))
         well_mx1 = well[phase - 1]
         well_mx2 = well[phase]
         if np.max(well_mx1) < threshold or np.max(well_mx2) < threshold:
             continue
         
-        coords1 = np.flip(np.argwhere(h_maxima(well_mx1, threshold)))
-        coords2 = np.flip(np.argwhere(h_maxima(well_mx2, threshold)))
+        coords1 = np.array(find_local_maxima(well_mx1, threshold, np.max(well_mx1), 3, mask), dtype=np.int32).T
+        coords2 = np.array(find_local_maxima(well_mx2, threshold, np.max(well_mx2), 3, mask), dtype=np.int32).T
         
+        print(len(coords1), len(coords2), end=' ')
         if len(coords1) < 5 or len(coords2) < 5:
             continue
-        
-        translation = find_translation_pmc(coords1, coords2, 1)[0].astype(int)
-        print(phase, len(coords1), len(coords2), translation, end=' ')
+    
+        translation = find_translation_stochastic(coords1, coords2, 1)[0].astype(int)
+        print(translation, end=' ')
         
         # Create meshgrid
         x, y = np.meshgrid(np.arange(well_mx1.shape[1]), np.arange(well_mx1.shape[0]))
