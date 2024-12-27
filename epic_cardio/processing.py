@@ -8,6 +8,8 @@ from nanobio_core.epic_cardio.defs import WELL_NAMES
 from nanobio_core.epic_cardio.measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from nanobio_core.epic_cardio.defs import *
 import json
+from skimage.segmentation import watershed
+from scipy.ndimage import distance_transform_edt
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -200,3 +202,18 @@ def parse_selection(well_data:dict, selector:WellArrayLineSelector, evaluation_p
 #     axs_2[n // 4, n % 4].plot(new_line)
 # fig.show()
 # fig_2.show()
+
+def watershed_segmentation(well, coords, ws_threshold, distance_threshold=3):
+    markers = np.arange(1, len(coords) + 1)
+    crd = np.max(well, axis=0)
+    crd[crd < 0] = 0
+    bn = np.zeros(crd.shape)
+    bn[crd > ws_threshold] = 1
+    mask = np.zeros(crd.shape, dtype=int)
+    for i in range(coords.shape[0]):
+        mask[coords[i, 1], coords[i, 0]] = markers[i]
+    distance_mask = distance_transform_edt(np.logical_not(mask))
+    bn[distance_mask > distance_threshold] = 0
+    im_watershed = watershed(-crd, mask, mask=bn)
+    im_watershed *= bn.astype(int)
+    return im_watershed
