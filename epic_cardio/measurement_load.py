@@ -27,9 +27,10 @@ def load_measurement(dir_path):
     
     if len(files) == 0:
         print("Missing test avg!!!")
-        return None, None
-    
-    avg_path = os.path.join(dir_path, files[0])
+        # return None, None
+        avg_path = None
+    else:
+        avg_path = os.path.join(dir_path, files[0])
     
     meas_mode = 'normal' if os.path.getsize(wl_power_path) == 614400 else 'high'
     
@@ -50,8 +51,8 @@ def load_measurement(dir_path):
     sorted_files.sort(key=lambda f: int(re.sub('\D', '', f)))
 
     timestep_mats = np.zeros([len(sorted_files),240,320])
-    for i in range(len(sorted_files)):
-        step = open(os.path.join(dir_path, f'DMR/{i + 1}'), 'rb')
+    for i, fl in enumerate(sorted_files):
+        step = open(os.path.join(dir_path, f'DMR', fl), 'rb')
         A_int = np.frombuffer(step.read(153600), dtype='uint16' if meas_mode == 'normal' else 'uint8')
         timestep_mats[i,:,:] = np.reshape(A_int,[240,320])
         step.close()
@@ -59,10 +60,10 @@ def load_measurement(dir_path):
     WL_map = np.tile(init_wl_map, [len(timestep_mats),1, 1]) + S*(timestep_mats-np.tile(timestep_mats[0,:,:],[len(timestep_mats),1,1]))
 
     time = []
-    try:
+    if avg_path != None:
         time = pd.read_table(avg_path, skiprows=1, decimal=',')
         time = np.asarray(time.iloc[:,0]) * 60
-    except Exception as e:
+    else:
         time = np.linspace(0, WL_map.shape[0] * 9, WL_map.shape[0])
     print(f"Measurement loaded {WL_map.shape} time {time.shape}")
     return WL_map, time
