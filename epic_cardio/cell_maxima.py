@@ -27,7 +27,7 @@ def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_s
     data_max = ndimage.maximum_filter(data, neighborhood_size)
     maxima = (data == data_max)
     data_min = ndimage.minimum_filter(data, neighborhood_size)
-    diff = np.logical_and(((data_max - data_min) > min_threshold),((data_max - data_min) < max_threshold))
+    diff = np.logical_and(((data_max - data_min) > min_threshold), ((data_max - data_min) < max_threshold))
     maxima[diff == 0] = 0
     
     if error_mask is not None:
@@ -38,10 +38,10 @@ def find_local_maxima(frame, min_threshold=0.1, max_threshold=10, neighborhood_s
     slices = ndimage.find_objects(labeled)
     
     x, y = [], []
-    for dy,dx in slices:
-        x_center = (dx.start + dx.stop - 1)/2
+    for dy, dx in slices:
+        x_center = (dx.start + dx.stop - 1) / 2
         x.append(x_center)
-        y_center = (dy.start + dy.stop - 1)/2    
+        y_center = (dy.start + dy.stop - 1) / 2    
         y.append(y_center)
     return x, y
 

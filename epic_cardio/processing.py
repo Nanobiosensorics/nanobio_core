@@ -1,15 +1,14 @@
 from operator import itemgetter
 import numpy as np
 import os
-from nanobio_core.epic_cardio.data_correction import correct_well, correct_interphase_well_shifts
-from nanobio_core.epic_cardio.cell_selector import WellArrayLineSelector
-from nanobio_core.epic_cardio.math_ops import calculate_cell_maximas
-from nanobio_core.epic_cardio.defs import WELL_NAMES
-from nanobio_core.epic_cardio.measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
-from nanobio_core.epic_cardio.defs import *
+from .data_correction import correct_well, correct_interphase_well_shifts
+from .cell_selector import WellArrayLineSelector
+from .math_ops import calculate_cell_maximas
+from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
+from .defs import *
 import json
 from skimage.segmentation import watershed
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, distance_transform_cdt
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -178,42 +177,52 @@ def parse_selection(well_data:dict, selector:WellArrayLineSelector, evaluation_p
                 selected_ptss[name] = ptss_selected
     return selected_ptss
 
-
-# fig, axs = plt.subplots(len(lines) // 4, 4, sharex=True, sharey=True)
-# fig_2, axs_2 = plt.subplots(len(lines) // 4, 4)
-
-# for n in range(lines.shape[0]):
-#     diff = np.diff(np.diff(lines[n]))
-#     rng = np.mean(diff) + np.std(diff)
-#     err = np.argwhere(np.logical_or(diff > rng, diff < -rng))
-#     err = err.reshape((-1,))
-#     err.sort()
-#     peaks = np.argwhere(np.diff(err) == 1)
-#     peaks = peaks.reshape((-1, ))
-#     err = np.unique(np.concatenate([err[peaks], err[peaks + 1]]))
-#     axs[n // 4, n % 4].plot(lines[n])
-#     # for e in err:
-#     #     axs[n // 4, n % 4].axvline(e, c='r')    
-#     data_range = np.arange(lines[n].shape[0])
-#     org = data_range.copy()
-#     data_range = np.delete(data_range, err, axis=0)
-#     line = np.delete(lines[n], err, axis=0)
-#     new_line = np.interp(org, data_range, line)
-#     axs_2[n // 4, n % 4].plot(new_line)
-# fig.show()
-# fig_2.show()
-
-def watershed_segmentation(well, coords, ws_threshold, distance_threshold=3):
-    markers = np.arange(1, len(coords) + 1)
-    crd = np.max(well, axis=0)
-    crd[crd < 0] = 0
-    bn = np.zeros(crd.shape)
-    bn[crd > ws_threshold] = 1
-    mask = np.zeros(crd.shape, dtype=int)
+def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.inf, mask = None):
+    if well.ndim == 3:
+        well_img = np.max(well, axis=0)
+    elif well.ndim != 2:
+        raise ValueError("Input well data must be 2D or 3D numpy array.")
+    else:
+        well_img = well.copy()
+    
+    well_img = well_img.clip(min=0)
+    well_img[well_img < 0] = 0
+    bn = np.zeros(well_img.shape)
+    bn[well_img > ws_threshold] = 1
+    centroid_mask = np.zeros(well_img.shape, dtype=int)
+    
     for i in range(coords.shape[0]):
-        mask[coords[i, 1], coords[i, 0]] = markers[i]
-    distance_mask = distance_transform_edt(np.logical_not(mask))
+        if mask is not None:
+            centroid_mask[coords[i, 1], coords[i, 0]] = mask[coords[i, 1], coords[i, 0]]
+        else:
+            centroid_mask[coords[i, 1], coords[i, 0]] = i + 1
+    
+    if mask is not None:
+        bn[mask > 0] = 1
+        
+    distance_mask = distance_transform_edt(np.logical_not(centroid_mask))
+        
     bn[distance_mask > distance_threshold] = 0
-    im_watershed = watershed(-crd, mask, mask=bn)
+    im_watershed = watershed(-well_img, centroid_mask if mask is None else mask, mask=bn)
     im_watershed *= bn.astype(int)
+
+    # ensure pixels stay assigned only when within the distance threshold of their own centroid
+    y_indices, x_indices = np.indices(well_img.shape)
+    threshold_sq = distance_threshold ** 2
+
+    for i in range(coords.shape[0]):
+        centroid_x, centroid_y = coords[i, 0], coords[i, 1]
+        label_id = centroid_mask[centroid_y, centroid_x]
+        label_mask = im_watershed == label_id
+
+        if not np.any(label_mask):
+            continue
+
+        dist_sq = (x_indices - centroid_x) ** 2 + (y_indices - centroid_y) ** 2
+        too_far = (dist_sq > threshold_sq) & label_mask
+
+        if np.any(too_far):
+            im_watershed[too_far] = 0
+            bn[too_far] = 0
+
     return im_watershed

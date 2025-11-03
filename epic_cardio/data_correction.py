@@ -3,7 +3,7 @@ from scipy.ndimage import distance_transform_edt
 from scipy import ndimage
 import matplotlib
 import matplotlib.pyplot as plt
-from nanobio_core.alignment import find_translation_pmc, find_translation_stochastic
+from ..alignment import find_translation_pmc, find_translation_stochastic
 from .math_ops import find_local_maxima
 
 def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5, layer=0):
