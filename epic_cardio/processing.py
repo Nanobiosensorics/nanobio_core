@@ -136,6 +136,7 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
 def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
     # Sejt szűrés a wellekből.
     well_data = {}
+    border_width = int(localization_params.get('filter_border_width', 0))
     slicer = slice(selected_range[0], selected_range[1])
     for name in WELL_NAMES:
         print("Parsing", name)
@@ -160,6 +161,18 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
                     max_threshold=localization_params['threshold_range'][1], 
                     neighborhood_size=localization_params['neighbourhood_size'],
                     error_mask=None if not localization_params['error_mask_filtering'] else mask)
+
+        if border_width > 0 and len(ptss) > 0:
+            ptss = np.asarray(ptss)
+            y_max, x_max = well_corr.shape[1], well_corr.shape[2]
+            is_inside = (
+                (ptss[:, 0] >= border_width) &
+                (ptss[:, 0] < x_max - border_width) &
+                (ptss[:, 1] >= border_width) &
+                (ptss[:, 1] < y_max - border_width)
+            )
+            ptss = ptss[is_inside]
+
         well_data[name] = (well_corr, ptss, filter_ptss)
     print("Parsing finished!")
     return well_data

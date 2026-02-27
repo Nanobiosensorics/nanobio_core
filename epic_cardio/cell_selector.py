@@ -179,6 +179,7 @@ class WellArrayLineSelector:
     # A jelek közötti navigáció lehetségesa billentyűzeten a balra, jobbra nyilakkal és
     # a mentés az ENTER billentyűvel
     _ids = [ 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
+    _click_select_radius = 1.5
     def __init__(self, wells_data, times, phases, block=True):
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
@@ -192,14 +193,21 @@ class WellArrayLineSelector:
         self._fig, (self._ax1,self._ax2) = plt.subplots(1,2, figsize=(16, 8))
         
         self.change_well()
-        
-        self._dots, = self._ax1.plot(self._pts_arr[0, 0], self._pts_arr[0, 1] , 'ro', markersize=5)
-        self._selected, = self._ax1.plot(self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0] , 'go', markersize=5)
+
+        if self.closed:
+            return
+
+        # Unselected points are red, selected points are green, current point is highlighted.
+        self._dots, = self._ax1.plot([], [], 'ro', markersize=5)
+        self._selected, = self._ax1.plot([], [], 'go', markersize=5)
+        self._current, = self._ax1.plot([], [], marker='o', linestyle='None', markersize=9,
+                                        markerfacecolor='none', markeredgecolor='white', markeredgewidth=1.5)
         self._ax1.set_xlabel('Pixel')
         self._ax1.set_ylabel('Pixel')
         self._ax2.set_xlabel('Time(s)')
         self._ax2.set_ylabel('WS(pm)')
         self._fig.canvas.mpl_connect('key_press_event', self.on_press)
+        self._fig.canvas.mpl_connect('button_press_event', self.on_click)
         self.draw_plot(0)
         plt.show(block=block)
         
@@ -216,15 +224,32 @@ class WellArrayLineSelector:
             for p in self._phases:
                 current_line[p] = np.nan
         return current_line
+
+    def _move_to_next_nonempty_well(self):
+        while self._well_id < len(self._ids):
+            pts = np.asarray(self._wells_data[self._ids[self._well_id]][1])
+            if pts.shape[0] > 0:
+                return True
+            self._well_id += 1
+        return False
+
+    def _move_to_prev_nonempty_well(self):
+        while self._well_id >= 0:
+            pts = np.asarray(self._wells_data[self._ids[self._well_id]][1])
+            if pts.shape[0] > 0:
+                return True
+            self._well_id -= 1
+        return False
     
     def change_well(self):
         if self._well_id >= len(self._ids):
             plt.close(self._fig)
             self.closed = True
-        elif self._wells_data[self._ids[self._well_id]][1].shape[0] == 0:
-            self._well_id += 1
-            self.change_well()
         else:
+            if not self._move_to_next_nonempty_well():
+                plt.close(self._fig)
+                self.closed = True
+                return
             self._well = np.max(self._wells_data[self._ids[self._well_id]][0], axis=0)
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
             
@@ -247,12 +272,28 @@ class WellArrayLineSelector:
             self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
 
     def draw_plot(self, cell_id):
+        if self.closed:
+            return
+        if self._pts_arr.shape[0] == 0:
+            return
+
+        cell_id = int(np.clip(cell_id, 0, self._pts_arr.shape[0] - 1))
+        self._i = cell_id + 1
         current_line = self._get_line(cell_id)
         self._elm.set_data(self._times[:len(current_line)], current_line)
         self._ax1.set_title(self._ids[self._well_id])
         self._ax2.set_title(f'Record: {cell_id + 1}/{self._pts_arr.shape[0]}')
-        self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
-        self._selected.set_data((self._pts_arr[self.saved_ids[self._ids[self._well_id]], 0], self._pts_arr[self.saved_ids[self._ids[self._well_id]], 1]))
+
+        # Draw all points as unselected (red), and selected subset as green.
+        self._dots.set_data((self._pts_arr[:, 0], self._pts_arr[:, 1]))
+        selected_ids = [i for i in self.saved_ids[self._ids[self._well_id]] if i < self._pts_arr.shape[0]]
+        if len(selected_ids) > 0:
+            self._selected.set_data((self._pts_arr[selected_ids, 0], self._pts_arr[selected_ids, 1]))
+        else:
+            self._selected.set_data(([], []))
+        self._current.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
+        self._refresh_selection_labels(selected_ids)
+
         self._ax2.set_ylim(-100, self._well_max)
         self._fig.canvas.draw()
 
@@ -265,15 +306,34 @@ class WellArrayLineSelector:
             self.draw_plot(self._i - 1)
         
     def on_button_minus_clicked(self, b):
-        self._i = self._i - 1 if self._i - 1 > 0 else 1
-        self.draw_plot(self._i - 1)
+        if self._i - 1 > 0:
+            self._i -= 1
+            self.draw_plot(self._i - 1)
+            return
+
+        if self._well_id == 0:
+            self._i = 1
+            self.draw_plot(self._i - 1)
+            return
+
+        self._well_id -= 1
+        if not self._move_to_prev_nonempty_well():
+            self._well_id = 0
+            self.change_well()
+            if self.closed is False:
+                self._i = 1
+                self.draw_plot(self._i - 1)
+            return
+
+        self.change_well()
+        if self.closed is False:
+            self._i = self._pts_arr.shape[0]
+            self.draw_plot(self._i - 1)
         
     def on_button_save_clicked(self, b):
         if self._i - 1 not in self.saved_ids[self._ids[self._well_id]]:
             # lines_selected.append(lines_arr[i[0] - 1, :])
             self.saved_ids[self._ids[self._well_id]].append(self._i - 1)
-            txt = self._ax1.text(self._pts_arr[self._i - 1, 0] + 1, self._pts_arr[self._i - 1, 1], f"{len(self.saved_ids[self._ids[self._well_id]]) - 1}", color='white')
-            self.texts.append(txt)
         self.on_button_plus_clicked(b)
         
     def on_press(self, event):
@@ -288,6 +348,64 @@ class WellArrayLineSelector:
                 self.draw_plot(self._i - 1)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
+        elif event.key == 'delete' or event.key == 'backspace':
+            well_name = self._ids[self._well_id]
+            current_idx = self._i - 1
+            if current_idx in self.saved_ids[well_name]:
+                self.saved_ids[well_name].remove(current_idx)
+                self.draw_plot(current_idx)
+
+    def on_click(self, event):
+        if self.closed:
+            return
+        if event.inaxes != self._ax1:
+            return
+        if hasattr(event, 'button') and event.button != 1:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+
+        well_name = self._ids[self._well_id]
+        well_data = self._wells_data[well_name][0]
+        y_max, x_max = well_data.shape[1], well_data.shape[2]
+        x = int(np.clip(np.rint(event.xdata), 0, x_max - 1))
+        y = int(np.clip(np.rint(event.ydata), 0, y_max - 1))
+
+        if self._pts_arr.shape[0] > 0:
+            dist = np.linalg.norm(self._pts_arr - np.asarray([x, y]), axis=1)
+            existing_ids = np.where(dist <= self._click_select_radius)[0]
+            if existing_ids.shape[0] > 0:
+                jump_idx = int(existing_ids[np.argmin(dist[existing_ids])])
+                self._i = jump_idx + 1
+                self.draw_plot(jump_idx)
+                return
+
+        new_point = np.array([[x, y]], dtype=np.int32)
+        current_pts = np.asarray(self._wells_data[well_name][1])
+        if current_pts.shape[0] == 0:
+            updated_pts = new_point
+        else:
+            updated_pts = np.vstack((current_pts, new_point))
+        well_entry = self._wells_data[well_name]
+        self._wells_data[well_name] = (well_entry[0], updated_pts, *well_entry[2:])
+        self._pts_arr = np.asarray(self._wells_data[well_name][1])
+
+        new_idx = self._pts_arr.shape[0] - 1
+        if new_idx not in self.saved_ids[well_name]:
+            self.saved_ids[well_name].append(new_idx)
+
+        self._i = new_idx + 1
+        self.draw_plot(new_idx)
+
+    def _refresh_selection_labels(self, selected_ids):
+        if len(self.texts) > 0:
+            for txt in self.texts:
+                txt.remove()
+            self.texts.clear()
+
+        for n, idx in enumerate(selected_ids):
+            txt = self._ax1.text(self._pts_arr[idx, 0] + 1, self._pts_arr[idx, 1], f"{n}", color='white')
+            self.texts.append(txt)
 
 class SignalCutter:
     def __init__(self, signals):
