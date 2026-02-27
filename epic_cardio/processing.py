@@ -2,7 +2,7 @@ from operator import itemgetter
 import numpy as np
 import os
 from .data_correction import correct_well, correct_interphase_well_shifts
-from .cell_selector import WellArrayLineSelector
+from .gui.cell_selector import WellArrayLineSelector
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *

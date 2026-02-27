@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-from .math_ops import get_max_well
+from ..math_ops import get_max_well
+from .preview_scene import WellPreviewSceneMixin
 
 class Coordinates(list):
     def __init__(self):
@@ -172,7 +173,7 @@ class WellLineSelector:
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
 
-class WellArrayLineSelector:
+class WellArrayLineSelector(WellPreviewSceneMixin):
     # Jelkiválasztó
     # Kézzel végig lehet futni a szelektált jeleken és meg lehet
     # adni, hogy melyikeket exportálja.
@@ -189,9 +190,7 @@ class WellArrayLineSelector:
         self._times = times
         self._phases = phases
         self.texts = []
-        self._preview_mode = False
-        self._preview_axes_by_well = {}
-        self._preview_well_by_axes = {}
+        self._init_preview_state()
         
         self._fig = plt.figure(figsize=(16, 8))
         self._build_main_layout()
@@ -250,56 +249,7 @@ class WellArrayLineSelector:
             self._well_id -= 1
         return False
 
-    def _set_active_well_by_name(self, well_name):
-        if well_name not in self._ids:
-            return
-        target_id = self._ids.index(well_name)
-        target_pts = np.asarray(self._wells_data[well_name][1])
-        # Keep empty wells visible in preview but not selectable for active navigation context.
-        if target_pts.shape[0] == 0:
-            return
-        self._well_id = target_id
-
-    def _draw_preview_scene(self):
-        self._fig.clf()
-        self._preview_axes_by_well = {}
-        self._preview_well_by_axes = {}
-
-        for n, well_name in enumerate(self._ids):
-            ax = self._fig.add_subplot(3, 4, n + 1)
-            well_mx = np.max(self._wells_data[well_name][0], axis=0)
-            vmax = np.max(well_mx)
-            ax.imshow(well_mx, vmin=0, vmax=vmax if vmax > 0 else 1)
-
-            pts = np.asarray(self._wells_data[well_name][1])
-            count = int(pts.shape[0]) if pts.ndim == 2 else 0
-            ax.set_title(f'{well_name} ({count})', fontsize=9)
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-            if pts.ndim == 2 and pts.shape[0] > 0:
-                ax.plot(pts[:, 0], pts[:, 1], 'ro', markersize=2, alpha=0.6)
-                selected_ids = [i for i in self.saved_ids[well_name] if i < pts.shape[0]]
-                if len(selected_ids) > 0:
-                    ax.plot(pts[selected_ids, 0], pts[selected_ids, 1], 'go', markersize=2.5, alpha=0.9)
-
-            is_active = (well_name == self._ids[self._well_id])
-            for spine in ax.spines.values():
-                spine.set_color('red' if is_active else 'black')
-                spine.set_linewidth(2 if is_active else 1)
-
-            self._preview_axes_by_well[well_name] = ax
-            self._preview_well_by_axes[ax] = well_name
-
-        self._fig.canvas.draw()
-
-    def _enter_preview_mode(self):
-        self._preview_mode = True
-        self._draw_preview_scene()
-
-    def _exit_preview_mode(self):
-        self._preview_mode = False
-        self._build_main_layout()
+    def _redraw_main_scene_on_preview_exit(self):
         self.change_well()
         if self.closed is False:
             self._ax1.set_xlabel('Pixel')
@@ -312,11 +262,26 @@ class WellArrayLineSelector:
                                             markerfacecolor='none', markeredgecolor='white', markeredgewidth=1.5)
             self.draw_plot(0)
 
-    def _toggle_preview_mode(self):
-        if self._preview_mode:
-            self._exit_preview_mode()
-        else:
-            self._enter_preview_mode()
+    def _preview_well_image(self, well_name):
+        return np.max(self._wells_data[well_name][0], axis=0)
+
+    def _preview_well_title(self, well_name):
+        pts = np.asarray(self._wells_data[well_name][1])
+        count = int(pts.shape[0]) if pts.ndim == 2 else 0
+        return f'{well_name} ({count})'
+
+    def _draw_preview_overlay(self, ax, well_name):
+        pts = np.asarray(self._wells_data[well_name][1])
+        if pts.ndim != 2 or pts.shape[0] == 0:
+            return
+        ax.plot(pts[:, 0], pts[:, 1], 'ro', markersize=2, alpha=0.6)
+        selected_ids = [i for i in self.saved_ids[well_name] if i < pts.shape[0]]
+        if len(selected_ids) > 0:
+            ax.plot(pts[selected_ids, 0], pts[selected_ids, 1], 'go', markersize=2.5, alpha=0.9)
+
+    def _preview_is_selectable(self, well_name):
+        pts = np.asarray(self._wells_data[well_name][1])
+        return pts.shape[0] > 0
     
     def change_well(self):
         if self._well_id >= len(self._ids):
@@ -413,22 +378,21 @@ class WellArrayLineSelector:
             self.saved_ids[self._ids[self._well_id]].append(self._i - 1)
         self.on_button_plus_clicked(b)
         
-    def on_press(self, event):
+    def _handle_global_key(self, event):
         if self.closed:
-            return
+            return True
 
         if event.key == 'f':
             self.closed = True
             plt.close(self._fig)
-            return
+            return True
 
         if event.key == 'a':
             self._toggle_preview_mode()
-            return
+            return True
+        return False
 
-        if self._preview_mode:
-            return
-
+    def _handle_main_key(self, event):
         if event.key == 'right' or event.key == '6':
             self.on_button_plus_clicked(None)
         elif event.key == 'left' or event.key == '4':
@@ -447,19 +411,14 @@ class WellArrayLineSelector:
                 self.saved_ids[well_name].remove(current_idx)
                 self.draw_plot(current_idx)
 
-    def on_click(self, event):
-        if self.closed:
+    def on_press(self, event):
+        if self._handle_global_key(event):
             return
         if self._preview_mode:
-            if hasattr(event, 'button') and event.button != 1:
-                return
-            if event.inaxes in self._preview_well_by_axes:
-                self._set_active_well_by_name(self._preview_well_by_axes[event.inaxes])
-                if getattr(event, 'dblclick', False):
-                    self._exit_preview_mode()
-                else:
-                    self._draw_preview_scene()
             return
+        self._handle_main_key(event)
+
+    def _handle_main_click(self, event):
         if event.inaxes != self._ax1:
             return
         if hasattr(event, 'button') and event.button != 1:
@@ -498,6 +457,14 @@ class WellArrayLineSelector:
 
         self._i = new_idx + 1
         self.draw_plot(new_idx)
+
+    def on_click(self, event):
+        if self.closed:
+            return
+        if self._preview_mode:
+            self._handle_preview_click(event)
+            return
+        self._handle_main_click(event)
 
     def _refresh_selection_labels(self, selected_ids):
         if len(self.texts) > 0:
