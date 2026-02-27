@@ -204,7 +204,13 @@ class WellArrayLineSelector:
         plt.show(block=block)
         
     def _get_line(self, cell_id):
-        current_line = self._wells_data[self._ids[self._well_id]][0][:, self._pts_arr[cell_id, 1], self._pts_arr[cell_id, 0]].copy()
+        x = int(np.rint(self._pts_arr[cell_id, 0]))
+        y = int(np.rint(self._pts_arr[cell_id, 1]))
+        well_data = self._wells_data[self._ids[self._well_id]][0]
+        y_max, x_max = well_data.shape[1], well_data.shape[2]
+        x = int(np.clip(x, 0, x_max - 1))
+        y = int(np.clip(y, 0, y_max - 1))
+        current_line = well_data[:, y, x].copy()
         
         if len(self._phases) > 0:
             for p in self._phases:
@@ -263,7 +269,7 @@ class WellArrayLineSelector:
         self.draw_plot(self._i - 1)
         
     def on_button_save_clicked(self, b):
-        if self._i - 1 not in self.saved_ids:
+        if self._i - 1 not in self.saved_ids[self._ids[self._well_id]]:
             # lines_selected.append(lines_arr[i[0] - 1, :])
             self.saved_ids[self._ids[self._well_id]].append(self._i - 1)
             txt = self._ax1.text(self._pts_arr[self._i - 1, 0] + 1, self._pts_arr[self._i - 1, 1], f"{len(self.saved_ids[self._ids[self._well_id]]) - 1}", color='white')

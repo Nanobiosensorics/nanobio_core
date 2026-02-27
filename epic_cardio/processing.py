@@ -191,11 +191,15 @@ def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.i
     bn[well_img > ws_threshold] = 1
     centroid_mask = np.zeros(well_img.shape, dtype=int)
     
-    for i in range(coords.shape[0]):
+    coords_idx = np.rint(coords).astype(np.int32)
+    coords_idx[:, 0] = np.clip(coords_idx[:, 0], 0, well_img.shape[1] - 1)
+    coords_idx[:, 1] = np.clip(coords_idx[:, 1], 0, well_img.shape[0] - 1)
+
+    for i in range(coords_idx.shape[0]):
         if mask is not None:
-            centroid_mask[coords[i, 1], coords[i, 0]] = mask[coords[i, 1], coords[i, 0]]
+            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = mask[coords_idx[i, 1], coords_idx[i, 0]]
         else:
-            centroid_mask[coords[i, 1], coords[i, 0]] = i + 1
+            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = i + 1
     
     if mask is not None:
         bn[mask > 0] = 1
@@ -210,8 +214,8 @@ def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.i
     y_indices, x_indices = np.indices(well_img.shape)
     threshold_sq = distance_threshold ** 2
 
-    for i in range(coords.shape[0]):
-        centroid_x, centroid_y = coords[i, 0], coords[i, 1]
+    for i in range(coords_idx.shape[0]):
+        centroid_x, centroid_y = coords_idx[i, 0], coords_idx[i, 1]
         label_id = centroid_mask[centroid_y, centroid_x]
         label_mask = im_watershed == label_id
 

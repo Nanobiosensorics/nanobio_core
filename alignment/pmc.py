@@ -16,7 +16,9 @@ from scipy.spatial import cKDTree
 def __build_graph(source_points: np.ndarray, target_points: np.ndarray, epsilon: float, correspondence_ratio: float):
   # Random sampling.
   correspondence_vectors = (target_points - source_points[:, np.newaxis]).reshape(-1, 2)
-  correspondence_vectors = correspondence_vectors[np.random.choice(len(correspondence_vectors), int(correspondence_ratio * len(correspondence_vectors)), replace=False)]
+  sample_size = int(correspondence_ratio * len(correspondence_vectors))
+  sample_size = max(1, min(sample_size, len(correspondence_vectors)))
+  correspondence_vectors = correspondence_vectors[np.random.choice(len(correspondence_vectors), sample_size, replace=False)]
 
   # Find vector pairs within epsilon without materializing the full pairwise distance matrix.
   tree = cKDTree(correspondence_vectors)
@@ -135,4 +137,7 @@ def find_translation_pmc(source_points: np.ndarray, target_points: np.ndarray, e
   R, R_best = [], []
   __find_clique(S, set(), __get_coloring_greedy(S, gamma))
 
-  return np.average(V[np.array(R_best, dtype=np.uint16)], axis=0), len(R_best)
+  if len(R_best) == 0:
+    return np.zeros(2, dtype=np.float32), 0
+
+  return np.average(V[np.array(R_best, dtype=np.int64)], axis=0), len(R_best)

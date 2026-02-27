@@ -216,7 +216,7 @@ class WellArrayBackgroundSelector:
     def on_press(self, event):
         if hasattr(event, 'button'):
             if event.xdata is None or event.ydata is None:
-                pass
+                return
             self.selected_coords[self._ids[self._well_id]].append((round(event.xdata),round(event.ydata)))
             self.draw_plot()
         elif event.key == 'right' or event.key == '6':
