@@ -250,7 +250,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         return False
 
     def _redraw_main_scene_on_preview_exit(self):
-        self.change_well()
+        self.change_well(skip_empty=False)
         if self.closed is False:
             self._ax1.set_xlabel('Pixel')
             self._ax1.set_ylabel('Pixel')
@@ -280,15 +280,14 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             ax.plot(pts[selected_ids, 0], pts[selected_ids, 1], 'go', markersize=2.5, alpha=0.9)
 
     def _preview_is_selectable(self, well_name):
-        pts = np.asarray(self._wells_data[well_name][1])
-        return pts.shape[0] > 0
+        return True
     
-    def change_well(self):
+    def change_well(self, skip_empty=True):
         if self._well_id >= len(self._ids):
             plt.close(self._fig)
             self.closed = True
         else:
-            if not self._move_to_next_nonempty_well():
+            if skip_empty and not self._move_to_next_nonempty_well():
                 plt.close(self._fig)
                 self.closed = True
                 return
@@ -306,17 +305,29 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             if hasattr(self, '_elm'):
                 self._elm.remove()
             
-            current_line = self._get_line(0)
-                    
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-            self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line, color='blue')
-        
-            self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
+            if self._pts_arr.shape[0] > 0:
+                current_line = self._get_line(0)
+                self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line, color='blue')
+                self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
+            else:
+                self._elm, = self._ax2.plot([], [], color='blue')
+                self._well_max = 1
 
     def draw_plot(self, cell_id):
         if self.closed:
             return
         if self._pts_arr.shape[0] == 0:
+            self._i = 1
+            self._ax1.set_title(self._ids[self._well_id])
+            self._ax2.set_title('Record: 0/0')
+            self._elm.set_data([], [])
+            self._dots.set_data(([], []))
+            self._selected.set_data(([], []))
+            self._current.set_data(([], []))
+            self._refresh_selection_labels([])
+            self._ax2.set_ylim(-100, self._well_max)
+            self._fig.canvas.draw()
             return
 
         cell_id = int(np.clip(cell_id, 0, self._pts_arr.shape[0] - 1))
@@ -492,6 +503,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         well_entry = self._wells_data[well_name]
         self._wells_data[well_name] = (well_entry[0], updated_pts, *well_entry[2:])
         self._pts_arr = np.asarray(self._wells_data[well_name][1])
+        self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
 
         new_idx = self._pts_arr.shape[0] - 1
         if new_idx not in self.saved_ids[well_name]:
