@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 from ..math_ops import get_max_well
+from .footage_slider import FootageSlider
 from .preview_scene import WellPreviewSceneMixin
 
 class Coordinates(list):
@@ -185,12 +186,15 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         self.saved_ids = {name:[] for name in self._ids}
         self.closed = False
         self._well_id = 0
+        self._frame_id = 0
         self._well_max = 0
+        self._well_vmax = 1
         self._wells_data = wells_data
         self._times = times
         self._phases = phases
         self.texts = []
         self._init_preview_state()
+        self._frame_slider = None
         
         self._fig = plt.figure(figsize=(16, 8))
         self._build_main_layout()
@@ -216,8 +220,11 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
 
     def _build_main_layout(self):
         self._fig.clf()
+        self._fig.subplots_adjust(bottom=0.2)
         self._ax1 = self._fig.add_subplot(1, 2, 1)
         self._ax2 = self._fig.add_subplot(1, 2, 2)
+        if self._frame_slider is None:
+            self._frame_slider = FootageSlider(self._fig, self._on_frame_changed)
         
     def _get_line(self, cell_id):
         x = int(np.rint(self._pts_arr[cell_id, 0]))
@@ -291,8 +298,15 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
                 plt.close(self._fig)
                 self.closed = True
                 return
-            self._well = np.max(self._wells_data[self._ids[self._well_id]][0], axis=0)
+            well_data = self._wells_data[self._ids[self._well_id]][0]
+            self._frame_id = int(np.clip(self._frame_id, 0, well_data.shape[0] - 1))
+            self._well_vmax = float(np.max(well_data))
+            if self._well_vmax <= 0:
+                self._well_vmax = 1
             self._pts_arr = np.asarray(self._wells_data[self._ids[self._well_id]][1])
+            max_checked = self._frame_slider.is_max_mode() if self._frame_slider is not None else True
+            self._frame_slider.build(well_data.shape[0], self._frame_id, max_checked=max_checked)
+            self._set_well_frame()
             
             self._i = 1
             if len(self.texts) > 0:
@@ -305,7 +319,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             if hasattr(self, '_elm'):
                 self._elm.remove()
             
-            self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
+            self._im = self._ax1.imshow(self._well, vmin = 0, vmax=self._well_vmax)
             if self._pts_arr.shape[0] > 0:
                 current_line = self._get_line(0)
                 self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line, color='blue')
@@ -319,7 +333,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             return
         if self._pts_arr.shape[0] == 0:
             self._i = 1
-            self._ax1.set_title(self._ids[self._well_id])
+            self._ax1.set_title(self._get_frame_title())
             self._ax2.set_title('Record: 0/0')
             self._elm.set_data([], [])
             self._dots.set_data(([], []))
@@ -334,7 +348,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         self._i = cell_id + 1
         current_line = self._get_line(cell_id)
         self._elm.set_data(self._times[:len(current_line)], current_line)
-        self._ax1.set_title(self._ids[self._well_id])
+        self._ax1.set_title(self._get_frame_title())
         self._ax2.set_title(f'Record: {cell_id + 1}/{self._pts_arr.shape[0]}')
 
         # Draw all points as unselected (red), and selected subset as green.
@@ -349,6 +363,30 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
 
         self._ax2.set_ylim(-100, self._well_max)
         self._fig.canvas.draw()
+
+    def _on_frame_changed(self, frame_id, _is_max):
+        if self.closed or self._preview_mode:
+            return
+        self._frame_id = frame_id
+        self._set_well_frame()
+        self._im.set_data(self._well)
+        self._ax1.set_title(self._get_frame_title())
+        self._fig.canvas.draw_idle()
+
+    def _set_well_frame(self):
+        well_data = self._wells_data[self._ids[self._well_id]][0]
+        self._frame_id = int(np.clip(self._frame_id, 0, well_data.shape[0] - 1))
+        if self._frame_slider.is_max_mode():
+            self._well = np.max(well_data, axis=0)
+        else:
+            self._well = well_data[self._frame_id, :, :]
+
+    def _get_frame_title(self):
+        if self._frame_slider.is_max_mode():
+            frame_label = 'MAX'
+        else:
+            frame_label = str(self._frame_id + 1)
+        return f'{self._ids[self._well_id]} | Frame: {frame_label}'
 
     def on_button_plus_clicked(self, b):
         self._i += 1
