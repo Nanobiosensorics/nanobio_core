@@ -9,6 +9,7 @@ from .defs import *
 import json
 from skimage.segmentation import watershed
 from scipy.ndimage import distance_transform_edt, distance_transform_cdt
+from tqdm import tqdm
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -138,17 +139,14 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
     well_data = {}
     border_width = int(localization_params.get('filter_border_width', 0))
     slicer = slice(selected_range[0], selected_range[1])
-    for name in WELL_NAMES:
-        print("Parsing", name)
+    for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
         well_tmp = wells[name]
         
         if preprocessing_params['drift_correction']['inter_phase_correction']:
-            print(name, ':', end=' ')
             well_tmp = correct_interphase_well_shifts(well_tmp, phases, 
                                             coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
                                             threshold=preprocessing_params['drift_correction']['threshold'],
                                             mode=preprocessing_params['drift_correction']['filter_method'])
-            print()
         
         well_tmp = well_tmp[slicer]
         well_corr, filter_ptss, mask = correct_well(well_tmp, 
@@ -174,7 +172,6 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
             ptss = ptss[is_inside]
 
         well_data[name] = (well_corr, ptss, filter_ptss)
-    print("Parsing finished!")
     return well_data
 
 def parse_selection(well_data:dict, selector:WellArrayLineSelector, evaluation_params:dict) -> (dict, dict):

@@ -309,7 +309,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             current_line = self._get_line(0)
                     
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=np.max(self._well))
-            self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line)
+            self._elm, = self._ax2.plot(self._times[:len(current_line)], current_line, color='blue')
         
             self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
 
@@ -404,12 +404,54 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
                 self.draw_plot(self._i - 1)
         elif event.key == 'enter':
             self.on_button_save_clicked(None)
+        elif self._is_ctrl_delete_shortcut(event.key):
+            self._delete_current_localization()
         elif event.key == 'delete' or event.key == 'backspace':
             well_name = self._ids[self._well_id]
             current_idx = self._i - 1
             if current_idx in self.saved_ids[well_name]:
                 self.saved_ids[well_name].remove(current_idx)
                 self.draw_plot(current_idx)
+
+    def _is_ctrl_delete_shortcut(self, key):
+        if key is None:
+            return False
+        parts = {part.strip().lower() for part in str(key).split('+')}
+        has_modifier = len(parts.intersection({'ctrl', 'control', 'cmd', 'super'})) > 0
+        has_delete_key = len(parts.intersection({'delete', 'backspace'})) > 0
+        return has_modifier and has_delete_key
+
+    def _delete_current_localization(self):
+        if self.closed:
+            return
+
+        well_name = self._ids[self._well_id]
+        pts = np.asarray(self._wells_data[well_name][1])
+        if pts.ndim != 2 or pts.shape[0] == 0:
+            return
+
+        current_idx = int(np.clip(self._i - 1, 0, pts.shape[0] - 1))
+        updated_pts = np.delete(pts, current_idx, axis=0)
+        well_entry = self._wells_data[well_name]
+        self._wells_data[well_name] = (well_entry[0], updated_pts, *well_entry[2:])
+
+        remapped_ids = []
+        for idx in self.saved_ids[well_name]:
+            if idx == current_idx:
+                continue
+            remapped_ids.append(idx - 1 if idx > current_idx else idx)
+        self.saved_ids[well_name] = remapped_ids
+
+        if updated_pts.shape[0] == 0:
+            self.change_well()
+            if self.closed is False:
+                self.draw_plot(self._i - 1)
+            return
+
+        self._pts_arr = updated_pts
+        self._well_max = max([np.nanmax(self._get_line(n)) for n in range(self._pts_arr.shape[0])])
+        self._i = min(self._i, self._pts_arr.shape[0])
+        self.draw_plot(self._i - 1)
 
     def on_press(self, event):
         if self._handle_global_key(event):
