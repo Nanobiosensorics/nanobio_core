@@ -21,19 +21,36 @@ class FootageSlider:
         self._max_ax = None
         self._slider = None
         self._max_check = None
+        self._slider_cid = None
+        self._max_cid = None
         self._suspend_callback = False
         self._suspend_max_callback = False
         self._is_max = True
 
     def remove(self):
+        if self._slider is not None and self._slider_cid is not None:
+            self._slider.disconnect(self._slider_cid)
+        if self._max_check is not None and self._max_cid is not None:
+            self._max_check.disconnect(self._max_cid)
+
         if self._slider_ax is not None:
-            self._slider_ax.remove()
+            try:
+                if self._slider_ax.figure is not None:
+                    self._slider_ax.remove()
+            except Exception:
+                pass
         if self._max_ax is not None:
-            self._max_ax.remove()
+            try:
+                if self._max_ax.figure is not None:
+                    self._max_ax.remove()
+            except Exception:
+                pass
         self._slider_ax = None
         self._max_ax = None
         self._slider = None
         self._max_check = None
+        self._slider_cid = None
+        self._max_cid = None
 
     def build(self, frame_count, current_frame=0, max_checked=True):
         self.remove()
@@ -42,20 +59,35 @@ class FootageSlider:
         frame = int(np.clip(current_frame, 0, max_frame))
 
         self._slider_ax = self._fig.add_axes(self._axes_rect)
-        self._slider = Slider(
-            self._slider_ax,
-            self._label,
-            valmin=0,
-            valmax=max_frame,
-            valinit=frame,
-            valstep=1,
-            valfmt='%d',
-        )
-        self._slider.on_changed(self._on_slider_change)
+        try:
+            self._slider = Slider(
+                self._slider_ax,
+                self._label,
+                valmin=0,
+                valmax=max_frame,
+                valinit=frame,
+                valstep=1,
+                valfmt='%d',
+                useblit=False,
+            )
+        except (TypeError, AttributeError):
+            self._slider = Slider(
+                self._slider_ax,
+                self._label,
+                valmin=0,
+                valmax=max_frame,
+                valinit=frame,
+                valstep=1,
+                valfmt='%d',
+            )
+        self._slider_cid = self._slider.on_changed(self._on_slider_change)
 
         self._max_ax = self._fig.add_axes(self._max_axes_rect)
-        self._max_check = CheckButtons(self._max_ax, ['Max'], [self._is_max])
-        self._max_check.on_clicked(self._on_max_toggle)
+        try:
+            self._max_check = CheckButtons(self._max_ax, ['Max'], [self._is_max], useblit=False)
+        except (TypeError, AttributeError):
+            self._max_check = CheckButtons(self._max_ax, ['Max'], [self._is_max])
+        self._max_cid = self._max_check.on_clicked(self._on_max_toggle)
         self._max_ax.set_facecolor('none')
         self._update_slider_style()
 

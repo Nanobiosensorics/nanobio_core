@@ -145,7 +145,7 @@ class WellLineSelector:
         self._elm.set_data((np.linspace(0, self._lines_arr.shape[1], self._lines_arr.shape[1]), self._lines_arr[cell_id, :]))
         self._ax2.set_title(f'Record: {cell_id}/{self._lines_arr.shape[0]}')
         self._im.set_data(self._well[np.argmax(self._lines_arr[cell_id, :]), :, :])
-        self._dots.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
+        self._dots.set_data(([self._pts_arr[cell_id, 0]], [self._pts_arr[cell_id, 1]]))
         self._selected.set_data((self._pts_arr[self.saved_ids, 0], self._pts_arr[self.saved_ids, 1]))
         self._fig.canvas.draw()
 
@@ -193,6 +193,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         self._times = times
         self._phases = phases
         self.texts = []
+        self._frame_cursor = None
         self._init_preview_state()
         self._frame_slider = None
         
@@ -225,6 +226,30 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         self._ax2 = self._fig.add_subplot(1, 2, 2)
         if self._frame_slider is None:
             self._frame_slider = FootageSlider(self._fig, self._on_frame_changed)
+
+    def _safe_remove_artist(self, artist):
+        if artist is None:
+            return
+        try:
+            if getattr(artist, 'figure', None) is not None:
+                artist.remove()
+        except (ValueError, NotImplementedError, AttributeError):
+            pass
+
+    def _get_frame_cursor_x(self):
+        if len(self._times) == 0:
+            return float(self._frame_id)
+        idx = int(np.clip(self._frame_id, 0, len(self._times) - 1))
+        return float(self._times[idx])
+
+    def _ensure_frame_cursor(self):
+        if self._frame_cursor is None:
+            self._frame_cursor = self._ax2.axvline(self._get_frame_cursor_x(), color='gray', linestyle='--')
+
+    def _update_frame_cursor(self):
+        self._ensure_frame_cursor()
+        x = self._get_frame_cursor_x()
+        self._frame_cursor.set_xdata([x, x])
         
     def _get_line(self, cell_id):
         x = int(np.rint(self._pts_arr[cell_id, 0]))
@@ -311,13 +336,16 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             self._i = 1
             if len(self.texts) > 0:
                 for txt in self.texts:
-                    txt.remove()
+                    self._safe_remove_artist(txt)
                 self.texts.clear()
                 
             if hasattr(self, '_im'):
-                self._im.remove()
+                self._safe_remove_artist(self._im)
             if hasattr(self, '_elm'):
-                self._elm.remove()
+                self._safe_remove_artist(self._elm)
+            if self._frame_cursor is not None:
+                self._safe_remove_artist(self._frame_cursor)
+                self._frame_cursor = None
             
             self._im = self._ax1.imshow(self._well, vmin = 0, vmax=self._well_vmax)
             if self._pts_arr.shape[0] > 0:
@@ -327,6 +355,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             else:
                 self._elm, = self._ax2.plot([], [], color='blue')
                 self._well_max = 1
+            self._update_frame_cursor()
 
     def draw_plot(self, cell_id):
         if self.closed:
@@ -341,6 +370,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             self._current.set_data(([], []))
             self._refresh_selection_labels([])
             self._ax2.set_ylim(-100, self._well_max)
+            self._update_frame_cursor()
             self._fig.canvas.draw()
             return
 
@@ -358,10 +388,11 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
             self._selected.set_data((self._pts_arr[selected_ids, 0], self._pts_arr[selected_ids, 1]))
         else:
             self._selected.set_data(([], []))
-        self._current.set_data((self._pts_arr[cell_id, 0], self._pts_arr[cell_id, 1]))
+        self._current.set_data(([self._pts_arr[cell_id, 0]], [self._pts_arr[cell_id, 1]]))
         self._refresh_selection_labels(selected_ids)
 
         self._ax2.set_ylim(-100, self._well_max)
+        self._update_frame_cursor()
         self._fig.canvas.draw()
 
     def _on_frame_changed(self, frame_id, _is_max):
@@ -370,6 +401,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
         self._frame_id = frame_id
         self._set_well_frame()
         self._im.set_data(self._well)
+        self._update_frame_cursor()
         self._ax1.set_title(self._get_frame_title())
         self._fig.canvas.draw_idle()
 
@@ -561,7 +593,7 @@ class WellArrayLineSelector(WellPreviewSceneMixin):
     def _refresh_selection_labels(self, selected_ids):
         if len(self.texts) > 0:
             for txt in self.texts:
-                txt.remove()
+                self._safe_remove_artist(txt)
             self.texts.clear()
 
         for n, idx in enumerate(selected_ids):
@@ -583,7 +615,7 @@ class SignalCutter:
     
     def _hover(self, evt):
         if evt.inaxes is not None:
-            self._line.set_xdata(evt.xdata)
+            self._line.set_xdata([evt.xdata, evt.xdata])
             self._fig.canvas.draw()
 
     def _push(self, evt):
