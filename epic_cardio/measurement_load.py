@@ -184,7 +184,7 @@ def load_measurement_384w(dir_path):
     
     avg_path = None
     if len(files) > 0:
-        os.path.join(dir_path, files[0])
+        avg_path = os.path.join(dir_path, files[0])
     else:
         print("Missing test avg!!!")
     

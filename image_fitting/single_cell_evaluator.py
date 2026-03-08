@@ -134,7 +134,7 @@ class CardioMicSingleCellEvaluator():
     @classmethod
     def _transform_resolution(cls, im_cardio, im_mic, im_markers, im_pxs, im_contour, im_watershed, centers, shape, resolution = 1):
         if resolution == 1:
-            return im_cardio, im_mic, im_markers, im_pxs, im_contour, centers
+            return im_cardio, im_mic, im_markers, im_pxs, im_contour, im_watershed, centers
 
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1

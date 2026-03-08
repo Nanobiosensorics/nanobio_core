@@ -2,13 +2,14 @@ from operator import itemgetter
 import numpy as np
 import os
 from .data_correction import correct_well, correct_interphase_well_shifts
-from .cell_selector import WellArrayLineSelector
+from .gui.cell_selector import WellArrayLineSelector
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *
 import json
 from skimage.segmentation import watershed
 from scipy.ndimage import distance_transform_edt, distance_transform_cdt
+from tqdm import tqdm
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -136,18 +137,16 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
 def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
     # Sejt szűrés a wellekből.
     well_data = {}
+    border_width = int(localization_params.get('filter_border_width', 0))
     slicer = slice(selected_range[0], selected_range[1])
-    for name in WELL_NAMES:
-        print("Parsing", name)
+    for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
         well_tmp = wells[name]
         
         if preprocessing_params['drift_correction']['inter_phase_correction']:
-            print(name, ':', end=' ')
             well_tmp = correct_interphase_well_shifts(well_tmp, phases, 
                                             coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
                                             threshold=preprocessing_params['drift_correction']['threshold'],
                                             mode=preprocessing_params['drift_correction']['filter_method'])
-            print()
         
         well_tmp = well_tmp[slicer]
         well_corr, filter_ptss, mask = correct_well(well_tmp, 
@@ -160,8 +159,19 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
                     max_threshold=localization_params['threshold_range'][1], 
                     neighborhood_size=localization_params['neighbourhood_size'],
                     error_mask=None if not localization_params['error_mask_filtering'] else mask)
+
+        if border_width > 0 and len(ptss) > 0:
+            ptss = np.asarray(ptss)
+            y_max, x_max = well_corr.shape[1], well_corr.shape[2]
+            is_inside = (
+                (ptss[:, 0] >= border_width) &
+                (ptss[:, 0] < x_max - border_width) &
+                (ptss[:, 1] >= border_width) &
+                (ptss[:, 1] < y_max - border_width)
+            )
+            ptss = ptss[is_inside]
+
         well_data[name] = (well_corr, ptss, filter_ptss)
-    print("Parsing finished!")
     return well_data
 
 def parse_selection(well_data:dict, selector:WellArrayLineSelector, evaluation_params:dict) -> (dict, dict):
@@ -191,11 +201,15 @@ def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.i
     bn[well_img > ws_threshold] = 1
     centroid_mask = np.zeros(well_img.shape, dtype=int)
     
-    for i in range(coords.shape[0]):
+    coords_idx = np.rint(coords).astype(np.int32)
+    coords_idx[:, 0] = np.clip(coords_idx[:, 0], 0, well_img.shape[1] - 1)
+    coords_idx[:, 1] = np.clip(coords_idx[:, 1], 0, well_img.shape[0] - 1)
+
+    for i in range(coords_idx.shape[0]):
         if mask is not None:
-            centroid_mask[coords[i, 1], coords[i, 0]] = mask[coords[i, 1], coords[i, 0]]
+            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = mask[coords_idx[i, 1], coords_idx[i, 0]]
         else:
-            centroid_mask[coords[i, 1], coords[i, 0]] = i + 1
+            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = i + 1
     
     if mask is not None:
         bn[mask > 0] = 1
@@ -210,8 +224,8 @@ def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.i
     y_indices, x_indices = np.indices(well_img.shape)
     threshold_sq = distance_threshold ** 2
 
-    for i in range(coords.shape[0]):
-        centroid_x, centroid_y = coords[i, 0], coords[i, 1]
+    for i in range(coords_idx.shape[0]):
+        centroid_x, centroid_y = coords_idx[i, 0], coords_idx[i, 1]
         label_id = centroid_mask[centroid_y, centroid_x]
         label_mask = im_watershed == label_id
 

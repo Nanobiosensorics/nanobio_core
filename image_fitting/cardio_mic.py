@@ -103,7 +103,7 @@ class CardioMicFitter:
             
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
-            with open(os.path.join(save_path, f'{"well" if self.name == None else self.name}_map_params.json')) as fp:
+            with open(os.path.join(save_path, f'{"well" if self.name == None else self.name}_map_params.json'), 'w') as fp:
                 json.dump(obj, fp)
         
         plt.close(self._fig)
