@@ -2,28 +2,42 @@ import numpy as np
 
 
 """
-:param segmentation: microscope image segmentation mask where each cell instance
-is marked with an unique number started from 1. (cell ids are 1, 2, 3...)
-:return: an array where the ith indexed centroid corresponds to the (i+1)th cell id.
+Compute centroids for labeled cell instances in a 2D segmentation mask.
+
+:param segmentation: 2D numpy array of shape (H, W) containing integer labels,
+    where 0 represents background and each cell instance is assigned a unique
+    positive integer ID (1, 2, 3, ...).
+
+:return: numpy array of shape (N, 2) containing centroid coordinates for each
+    labeled cell, where N is the number of unique cell IDs (excluding background).
+    Each row corresponds to a cell ID in ascending order, such that the ith row
+    contains the centroid of cell with label (i + 1). Coordinates are returned
+    in (x, y) format as floating-point values.
 """
 def calculate_microscope_cell_centroids(segmentation: np.ndarray):
+    labels = segmentation.ravel()
 
-  # For every cell instance we have a centroid.
-  result = []
+    # Get coordinates
+    y_coords, x_coords = np.indices(segmentation.shape)
+    y_coords = y_coords.ravel()
+    x_coords = x_coords.ravel()
 
-  # Calculating cell centroids for each cell id.
-  for idx in np.unique(segmentation)[1:]:
-    # Getting x and y indices of the current cell.
-    indices = np.where(segmentation == idx)
+    # Count pixels per label
+    counts = np.bincount(labels)
 
-    if len(indices[0]) > 0 and len(indices[1]) > 0:
-      # Getting coords by averaging cell indices.
-      y_mean = np.mean(indices[0])
-      x_mean = np.mean(indices[1])
+    # Sum coordinates per label
+    sum_x = np.bincount(labels, weights=x_coords)
+    sum_y = np.bincount(labels, weights=y_coords)
 
-      result.append(np.array([x_mean, y_mean]))
+    # Avoid division by zero
+    valid = counts > 0
 
-  return np.array(result)
+    # Compute centroids
+    centroids_x = sum_x[valid] / counts[valid]
+    centroids_y = sum_y[valid] / counts[valid]
+
+    # Stack results (skip background label 0)
+    return np.stack((centroids_x[1:], centroids_y[1:]), axis=1)
 
 
 """
