@@ -15,6 +15,26 @@ class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
 
+
+def _border_filter_values(localization_params):
+    border = localization_params.get('filter_border')
+    if isinstance(border, dict):
+        return {
+            'top': max(0, int(border.get('top', 0) or 0)),
+            'bottom': max(0, int(border.get('bottom', 0) or 0)),
+            'left': max(0, int(border.get('left', 0) or 0)),
+            'right': max(0, int(border.get('right', 0) or 0)),
+        }
+
+    # Backward compatibility with legacy single border width.
+    width = max(0, int(localization_params.get('filter_border_width', 0) or 0))
+    return {
+        'top': width,
+        'bottom': width,
+        'left': width,
+        'right': width,
+    }
+
 def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL, flip=[False, False]):
     try:
         # Betölti a 3x4-es well képet a projekt mappából.
@@ -137,7 +157,7 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
 def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
     # Sejt szűrés a wellekből.
     well_data = {}
-    border_width = int(localization_params.get('filter_border_width', 0))
+    border_filter = _border_filter_values(localization_params)
     slicer = slice(selected_range[0], selected_range[1])
     for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
         well_tmp = wells[name]
@@ -160,14 +180,18 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
                     neighborhood_size=localization_params['neighbourhood_size'],
                     error_mask=None if not localization_params['error_mask_filtering'] else mask)
 
-        if border_width > 0 and len(ptss) > 0:
+        if len(ptss) > 0 and any(v > 0 for v in border_filter.values()):
             ptss = np.asarray(ptss)
             y_max, x_max = well_corr.shape[1], well_corr.shape[2]
+            top = min(border_filter['top'], y_max)
+            bottom = min(border_filter['bottom'], y_max)
+            left = min(border_filter['left'], x_max)
+            right = min(border_filter['right'], x_max)
             is_inside = (
-                (ptss[:, 0] >= border_width) &
-                (ptss[:, 0] < x_max - border_width) &
-                (ptss[:, 1] >= border_width) &
-                (ptss[:, 1] < y_max - border_width)
+                (ptss[:, 0] >= left) &
+                (ptss[:, 0] < x_max - right) &
+                (ptss[:, 1] >= top) &
+                (ptss[:, 1] < y_max - bottom)
             )
             ptss = ptss[is_inside]
 
