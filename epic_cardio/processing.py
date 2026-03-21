@@ -16,7 +16,18 @@ class RangeType():
     INDIVIDUAL_POINT=1
 
 
-def _border_filter_values(localization_params):
+def _border_filter_values(localization_params, well_name):
+    per_well = localization_params.get('filter_border_per_well')
+    if isinstance(per_well, dict):
+        border = per_well.get(well_name, {})
+        if isinstance(border, dict):
+            return {
+                'top': max(0, int(border.get('top', 0) or 0)),
+                'bottom': max(0, int(border.get('bottom', 0) or 0)),
+                'left': max(0, int(border.get('left', 0) or 0)),
+                'right': max(0, int(border.get('right', 0) or 0)),
+            }
+
     border = localization_params.get('filter_border')
     if isinstance(border, dict):
         return {
@@ -157,9 +168,9 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
 def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
     # Sejt szűrés a wellekből.
     well_data = {}
-    border_filter = _border_filter_values(localization_params)
     slicer = slice(selected_range[0], selected_range[1])
     for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
+        border_filter = _border_filter_values(localization_params, name)
         well_tmp = wells[name]
         
         if preprocessing_params['drift_correction']['inter_phase_correction']:
