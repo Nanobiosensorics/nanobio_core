@@ -326,3 +326,8 @@ class CardioMicSingleCellEvaluator():
                            'dl_p': dl_p_s,
                            'dl_cp': dl_cp_s,
                            'dl_w': dl_w_s}, fp)
+
+
+def evaluate(*args, **kwargs):
+    """Stable functional entry point for single-cell evaluation."""
+    return CardioMicSingleCellEvaluator(*args, **kwargs)
