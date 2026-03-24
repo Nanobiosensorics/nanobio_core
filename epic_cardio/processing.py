@@ -3,6 +3,7 @@ import numpy as np
 import os
 from typing import Any
 from .data_correction import correct_well, correct_interphase_well_shifts
+from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *
@@ -14,37 +15,6 @@ from tqdm import tqdm
 class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
-
-
-def _border_filter_values(localization_params, well_name):
-    per_well = localization_params.get('filter_border_per_well')
-    if isinstance(per_well, dict):
-        border = per_well.get(well_name, {})
-        if isinstance(border, dict):
-            return {
-                'top': max(0, int(border.get('top', 0) or 0)),
-                'bottom': max(0, int(border.get('bottom', 0) or 0)),
-                'left': max(0, int(border.get('left', 0) or 0)),
-                'right': max(0, int(border.get('right', 0) or 0)),
-            }
-
-    border = localization_params.get('filter_border')
-    if isinstance(border, dict):
-        return {
-            'top': max(0, int(border.get('top', 0) or 0)),
-            'bottom': max(0, int(border.get('bottom', 0) or 0)),
-            'left': max(0, int(border.get('left', 0) or 0)),
-            'right': max(0, int(border.get('right', 0) or 0)),
-        }
-
-    # Backward compatibility with legacy single border width.
-    width = max(0, int(localization_params.get('filter_border_width', 0) or 0))
-    return {
-        'top': width,
-        'bottom': width,
-        'left': width,
-        'right': width,
-    }
 
 def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL, flip=[False, False]):
     try:
@@ -170,7 +140,7 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
     well_data = {}
     slicer = slice(selected_range[0], selected_range[1])
     for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
-        border_filter = _border_filter_values(localization_params, name)
+        border_filter = border_filter_for_well(localization_params, name)
         well_tmp = wells[name]
         
         if preprocessing_params['drift_correction']['inter_phase_correction']:
