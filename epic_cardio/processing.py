@@ -1,8 +1,8 @@
 from operator import itemgetter
 import numpy as np
 import os
+from typing import Any
 from .data_correction import correct_well, correct_interphase_well_shifts
-from .gui.cell_selector import WellArrayLineSelector
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *
@@ -209,7 +209,7 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
         well_data[name] = (well_corr, ptss, filter_ptss)
     return well_data
 
-def parse_selection(well_data:dict, selector:WellArrayLineSelector, evaluation_params:dict) -> (dict, dict):
+def parse_selection(well_data:dict, selector: Any, evaluation_params:dict) -> (dict, dict):
     selected_ptss = {}
     for name in WELL_NAMES:
         if not evaluation_params['cell_selector']:
