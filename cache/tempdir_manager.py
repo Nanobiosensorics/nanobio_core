@@ -35,7 +35,10 @@ class TempDirManager:
             if self._config.cache_root_mode == "explicit_path" and self._config.cache_root_path:
                 root = Path(self._config.cache_root_path).expanduser().resolve()
                 root.mkdir(parents=True, exist_ok=True)
-                self._active_path = Path(tempfile.mkdtemp(prefix="nanobio-cache-", dir=str(root)))
+                if self._config.cleanup_on_exit:
+                    self._active_path = Path(tempfile.mkdtemp(prefix="nanobio-cache-", dir=str(root)))
+                else:
+                    self._active_path = root
             else:
                 self._active_path = Path(tempfile.mkdtemp(prefix="nanobio-cache-"))
         except Exception:

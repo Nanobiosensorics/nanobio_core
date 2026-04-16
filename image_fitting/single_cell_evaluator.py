@@ -17,8 +17,8 @@ class CardioMicSingleCellEvaluator():
     def __init__(self, time, well, im_mic, im_mask, im_pred, params, load_selection=None,
                  save_selection=True, save_path='./segmentation.npz', ws_threshold = 160,
                  filter_params = {
-                    'area': (-np.Inf, np.Inf),
-                    'max_value': (100, np.Inf),
+                    'area': (-np.inf, np.inf),
+                    'max_value': (100, np.inf),
                     'adjacent': True,
                 }):
         self.idx = 0

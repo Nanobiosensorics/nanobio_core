@@ -22,7 +22,7 @@ def find_translation_stochastic(source_points: np.ndarray, target_points: np.nda
   correspondence_vectors = (target_points - source_points[:, np.newaxis]).reshape(-1, 2)
 
   # Storing the best average error and best translation.
-  best_error, best_translation = np.Infinity, None
+  best_error, best_translation = np.inf, None
 
   # Evaluating a translation candidate by shifting all correspondence vectors and calculating
   # average length.
@@ -39,7 +39,7 @@ def find_translation_stochastic(source_points: np.ndarray, target_points: np.nda
     X, Y = np.meshgrid(x, y)
     dt = np.stack([X, Y], axis=-1).reshape((-1, 2))
 
-    best_error, best_transformed = np.Infinity, None
+    best_error, best_transformed = np.inf, None
     for t in dt:
       error = evaluate_candidate(translation + t)
       if error < best_error:
@@ -56,4 +56,3 @@ def find_translation_stochastic(source_points: np.ndarray, target_points: np.nda
       best_translation = candidate
   
   return optimize_translation(best_translation)
-
