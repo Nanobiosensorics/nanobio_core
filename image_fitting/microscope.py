@@ -29,6 +29,30 @@ def _log(msg: str, log_callback: Optional[Callable[[str], None]] = None) -> None
         log_callback(msg)
 
 
+def _read_cv2_any_path(
+    path: Path,
+    flags: int,
+    label: str,
+    log_callback: Optional[Callable[[str], None]] = None,
+):
+    image = cv2.imread(str(path), flags)
+    if image is not None or not path.exists():
+        return image
+    _log(f"{label} direct read failed, retrying via imdecode: {path}", log_callback)
+    try:
+        payload = np.fromfile(str(path), dtype=np.uint8)
+    except OSError as exc:
+        _log(f"{label} fallback read failed for {path}: {exc}", log_callback)
+        return None
+    if payload.size == 0:
+        _log(f"{label} fallback payload is empty: {path}", log_callback)
+        return None
+    image = cv2.imdecode(payload, flags)
+    if image is None:
+        _log(f"{label} fallback decode returned None: {path}", log_callback)
+    return image
+
+
 @dataclass
 class MicroscopeImportData:
     image: np.ndarray
@@ -65,7 +89,7 @@ class MicroscopeModel:
 def _load_image(path: Path, log_callback: Optional[Callable[[str], None]] = None) -> Optional[np.ndarray]:
     _log(f"loading image: {path}", log_callback)
     t0 = time.perf_counter()
-    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    image = _read_cv2_any_path(path, cv2.IMREAD_UNCHANGED, "image", log_callback)
     _log(f"image read finished in {time.perf_counter() - t0:.3f}s: {path.name}", log_callback)
     if image is None:
         _log(f"image is None: {path}", log_callback)
@@ -86,7 +110,7 @@ def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None)
             return None
         mask = payload["im_markers"]
     else:
-        mask = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        mask = _read_cv2_any_path(path, cv2.IMREAD_UNCHANGED, "mask", log_callback)
     _log(f"mask read finished in {time.perf_counter() - t0:.3f}s: {path.name}", log_callback)
     if mask is None:
         _log(f"mask is None: {path}", log_callback)
