@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import tempfile
 
 import numpy as np
 
@@ -18,9 +20,15 @@ class DiskArrayStore:
             raise RuntimeError("Disk store is disabled")
         part_dir = self._cache_root / partition
         part_dir.mkdir(parents=True, exist_ok=True)
-        file_path = part_dir / f"{key_hash}.npy"
         payload = arr if arr.flags["C_CONTIGUOUS"] else np.ascontiguousarray(arr)
-        np.save(file_path, payload, allow_pickle=False)
+        fd, temp_path = tempfile.mkstemp(prefix=f"{key_hash}-", suffix=".npy", dir=part_dir)
+        file_path = Path(temp_path)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                np.save(handle, payload, allow_pickle=False)
+        except Exception:
+            file_path.unlink(missing_ok=True)
+            raise
         return str(file_path)
 
     def read(self, file_path: str, mmap: bool) -> np.ndarray:
