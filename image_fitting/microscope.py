@@ -109,14 +109,31 @@ def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None)
             _log(f"mask npz missing 'im_markers': {path}", log_callback)
             return None
         mask = payload["im_markers"]
+    elif suffix == ".npy":
+        payload = np.load(str(path), allow_pickle=True)
+        if isinstance(payload, np.ndarray) and payload.dtype == object:
+            if payload.shape != ():
+                _log(f"Cellpose mask must contain a 2D numeric array or dictionary payload: {path}", log_callback)
+                return None
+            cellpose_data = payload.item()
+            if not isinstance(cellpose_data, dict) or "masks" not in cellpose_data:
+                _log(f"Cellpose mask missing 'masks': {path}", log_callback)
+                return None
+            mask = np.asarray(cellpose_data["masks"])
+        else:
+            mask = np.asarray(payload)
+        mask = np.squeeze(mask)
     else:
         mask = _read_cv2_any_path(path, cv2.IMREAD_UNCHANGED, "mask", log_callback)
     _log(f"mask read finished in {time.perf_counter() - t0:.3f}s: {path.name}", log_callback)
     if mask is None:
         _log(f"mask is None: {path}", log_callback)
         return None
-    if mask.ndim == 3:
+    if suffix != ".npy" and mask.ndim == 3:
         mask = mask[..., 0]
+    if mask.ndim != 2:
+        _log(f"mask must resolve to a single-channel 2D label array: {path}", log_callback)
+        return None
     mask = mask.astype(np.int32, copy=False)
     mask[mask < 0] = 0
     return mask
@@ -134,6 +151,9 @@ def discover_mask_file(base: Path, well: str) -> Optional[Path]:
     npz_path = base / f"{well}.npz"
     if npz_path.exists():
         return npz_path
+    cellpose_path = base / f"{well}_seg.npy"
+    if cellpose_path.exists():
+        return cellpose_path
     for ext in (".tif", ".tiff"):
         candidate = base / f"{well}_mask{ext}"
         if candidate.exists():
@@ -281,7 +301,7 @@ def import_microscope_dataset(
 
             mask_path = discover_mask_file(base, well)
             if mask_path is None:
-                errors.append(f"{well}: missing labeled mask ({well}.npz or {well}_mask.tif)")
+                errors.append(f"{well}: missing labeled mask ({well}.npz, {well}_seg.npy, or {well}_mask.tif)")
                 _log(f"{well}: missing mask", log_callback)
                 processed_wells += 1
                 _emit_progress(progress_callback, processed_wells, total_wells, f"{well}: missing mask")
