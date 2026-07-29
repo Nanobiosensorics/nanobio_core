@@ -19,6 +19,7 @@ class MicroscopeCellImageData:
     focused_contour: np.ndarray
     strategy_contour: np.ndarray
     crop_bounds: Tuple[int, int, int, int]
+    overlay_alpha: float = 0.35
 
 
 def extract_signal_lines(
@@ -121,7 +122,9 @@ def build_microscope_cell_image_data(
     epic_image: Optional[np.ndarray] = None,
     aligned_rect: Optional[Tuple[float, float, float, float]] = None,
     strategy_pixel_set: Optional[np.ndarray] = None,
+    strategy: str = "max",
     overlay_limits: Optional[Tuple[float, float]] = None,
+    overlay_alpha: float = 0.35,
 ) -> Optional[MicroscopeCellImageData]:
     image = np.asarray(microscope_image)
     mask = np.asarray(microscope_mask, dtype=np.int32)
@@ -153,7 +156,8 @@ def build_microscope_cell_image_data(
     else:
         crop_image = np.asarray(image[y0:y1, x0:x1], dtype=np.float32)
     crop_mask = mask[y0:y1, x0:x1]
-    focused_contour = segment_contour_from_region(crop_mask == int(label))
+    focused_region = crop_mask == int(label)
+    focused_contour = segment_contour_from_region(focused_region)
     strategy_contour = np.zeros(crop_mask.shape, dtype=bool)
     overlay_crop = None
     overlay_vmin, overlay_vmax = 0.0, 1.0
@@ -205,12 +209,14 @@ def build_microscope_cell_image_data(
             )
             overlay_crop = np.full(crop_mask.shape, np.nan, dtype=np.float32)
             overlay_crop[valid] = epic[epic_y[valid], epic_x[valid]]
+            flat_ids = epic_y * epic.shape[1] + epic_x
 
             coords = (
                 np.empty((0, 2), dtype=np.int32)
                 if strategy_pixel_set is None
                 else np.asarray(strategy_pixel_set, dtype=np.int32)
             )
+            fallback_ids = np.empty((0,), dtype=np.int32)
             if coords.ndim == 2 and coords.shape[1] == 2 and coords.shape[0] > 0:
                 coords = coords[
                     (coords[:, 0] >= 0)
@@ -219,10 +225,19 @@ def build_microscope_cell_image_data(
                     & (coords[:, 1] < epic.shape[0])
                 ]
                 if coords.shape[0] > 0:
-                    selected_ids = coords[:, 1] * epic.shape[1] + coords[:, 0]
-                    flat_ids = epic_y * epic.shape[1] + epic_x
-                    strategy_region = valid & np.isin(flat_ids, selected_ids)
-                    strategy_contour = segment_contour_from_region(strategy_region)
+                    fallback_ids = coords[:, 1] * epic.shape[1] + coords[:, 0]
+
+            selected_ids = select_microscope_strategy_epic_ids(
+                strategy,
+                focused_region,
+                valid,
+                flat_ids,
+                epic,
+                fallback_ids=fallback_ids,
+            )
+            if selected_ids.size > 0:
+                strategy_region = valid & np.isin(flat_ids, selected_ids)
+                strategy_contour = segment_contour_from_region(strategy_region)
 
     return MicroscopeCellImageData(
         label=int(label),
@@ -233,7 +248,53 @@ def build_microscope_cell_image_data(
         focused_contour=focused_contour,
         strategy_contour=strategy_contour,
         crop_bounds=(int(x0), int(y0), int(x1), int(y1)),
+        overlay_alpha=float(np.clip(float(overlay_alpha), 0.0, 1.0)),
     )
+
+
+def select_microscope_strategy_epic_ids(
+    strategy: str,
+    focused_region: np.ndarray,
+    valid_map: np.ndarray,
+    flat_ids: np.ndarray,
+    epic_image: np.ndarray,
+    *,
+    fallback_ids: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Select EPIC pixels with the same rules used by the single-cell viewer."""
+    epic = np.asarray(epic_image, dtype=np.float32)
+    focus = np.asarray(focused_region, dtype=bool)
+    valid = np.asarray(valid_map, dtype=bool)
+    mapped_ids = np.asarray(flat_ids, dtype=np.int64)
+    epic_size = int(epic.size) if epic.ndim == 2 else 0
+
+    fallback = (
+        np.empty((0,), dtype=np.int64)
+        if fallback_ids is None
+        else np.asarray(fallback_ids, dtype=np.int64).reshape(-1)
+    )
+    fallback = np.unique(fallback[(fallback >= 0) & (fallback < epic_size)])
+
+    overlap_ids = np.empty((0,), dtype=np.int64)
+    if focus.shape == valid.shape == mapped_ids.shape and epic_size > 0:
+        overlap_ids = mapped_ids[focus & valid]
+        overlap_ids = np.unique(
+            overlap_ids[(overlap_ids >= 0) & (overlap_ids < epic_size)]
+        )
+
+    normalized_strategy = str(strategy).strip().lower()
+    if normalized_strategy == "cover":
+        selected_ids = overlap_ids
+    elif normalized_strategy == "max":
+        if overlap_ids.size > 0:
+            values = epic.reshape(-1)[overlap_ids]
+            selected_ids = overlap_ids[[int(np.argmax(values))]]
+        else:
+            selected_ids = fallback
+    else:
+        selected_ids = fallback if fallback.size > 0 else overlap_ids
+
+    return np.asarray(selected_ids, dtype=np.int32)
 
 
 def segment_contour_from_region(region: np.ndarray) -> np.ndarray:
