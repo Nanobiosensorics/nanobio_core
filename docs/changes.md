@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-09-24
+
+- Added optional per-well progress callbacks to preprocessing and localization pipeline helpers so
+  GUI callers can report restoration progress without parsing console output.
+
 ## 2026-07-29
 
 - Added Cellpose `<well>_seg.npy` discovery and import. Dictionary payloads use the `masks` field, singleton dimensions are squeezed, and the resolved label mask must be two-dimensional.

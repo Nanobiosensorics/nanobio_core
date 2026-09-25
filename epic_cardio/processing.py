@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 import os
-from typing import Any
+from typing import Any, Callable, Optional
 from .data_correction import correct_well, correct_interphase_well_shifts
 from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
@@ -75,7 +75,10 @@ def save_params(path, well_data, preprocessing, localization):
         json.dump(parameters, f)
 
 
-def preprocessing(preprocessing_params, wells, time, phases, background_coords={}):
+def preprocessing(
+    preprocessing_params, wells, time, phases, background_coords={},
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+):
     well_data = {}
     filter_ptss = {}
     
@@ -115,8 +118,9 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
                 tmp.append(p - selected_range[0])
         phases = tmp
 
-    for name in WELL_NAMES:
-        print("Parsing", name, end='\r')
+    for done, name in enumerate(WELL_NAMES, start=1):
+        if progress_callback is None:
+            print("Parsing", name, end='\r')
         well_tmp = wells[name]
         
         # if export_params['breakdown_signal']:
@@ -132,14 +136,25 @@ def preprocessing(preprocessing_params, wells, time, phases, background_coords={
                                         mode=preprocessing_params['drift_correction']['filter_method'])
         well_data[name] = well_corr
         filter_ptss[name] = coords
-    print("Parsing finished!")
+        if progress_callback is not None:
+            progress_callback(done, len(WELL_NAMES), f"Preprocessed well {name}")
+    if progress_callback is None:
+        print("Parsing finished!")
     return well_data, time, phases, filter_ptss, selected_range
 
-def localization(preprocessing_params, localization_params, wells, phases, selected_range, background_coords={}):
+def localization(
+    preprocessing_params, localization_params, wells, phases, selected_range, background_coords={},
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+):
     # Sejt szűrés a wellekből.
     well_data = {}
     slicer = slice(selected_range[0], selected_range[1])
-    for name in tqdm(WELL_NAMES, desc="Parsing", unit="well"):
+    well_names = (
+        WELL_NAMES
+        if progress_callback is not None
+        else tqdm(WELL_NAMES, desc="Parsing", unit="well")
+    )
+    for done, name in enumerate(well_names, start=1):
         border_filter = border_filter_for_well(localization_params, name)
         well_tmp = wells[name]
         
@@ -177,6 +192,8 @@ def localization(preprocessing_params, localization_params, wells, phases, selec
             ptss = ptss[is_inside]
 
         well_data[name] = (well_corr, ptss, filter_ptss)
+        if progress_callback is not None:
+            progress_callback(done, len(WELL_NAMES), f"Localized well {name}")
     return well_data
 
 def parse_selection(well_data:dict, selector: Any, evaluation_params:dict) -> (dict, dict):
