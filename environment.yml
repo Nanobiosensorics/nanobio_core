@@ -3,6 +3,7 @@ channels:
   - nodefaults
 dependencies:
   - python=3.11
+  - bottleneck
   - numpy
   - pandas
   - scipy

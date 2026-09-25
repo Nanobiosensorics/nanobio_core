@@ -2,7 +2,7 @@ from operator import itemgetter
 import numpy as np
 import os
 from typing import Any, Callable, Optional
-from .data_correction import correct_well, correct_interphase_well_shifts
+from .data_correction import correct_well, correct_interphase_well_shifts, interpolate_frame_jumps
 from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
@@ -92,7 +92,8 @@ def preprocessing(
                 'threshold': 75,
                 'filter_method': 'mean',
                 'background_selector': True,
-                'inter_phase_correction': False
+                'frame_jump_correction': True,
+                'frame_jump_threshold': 75.0,
             }
         }
     
@@ -129,15 +130,35 @@ def preprocessing(
         #     peak_until = peak_until if line[peak_until] > line[phases[-1] - 1] else phases[-1] - 1
         #     breakdowns[name] = peak_until
         
+        drift_params = preprocessing_params['drift_correction']
         well_tmp = well_tmp[slicer]
-        well_corr, coords, _ = correct_well(well_tmp, 
+        well_tmp = correct_interphase_well_shifts(
+            well_tmp, phases,
+            coords=(
+                [] if not drift_params['background_selector'] or len(background_coords) == 0
+                else background_coords[name]
+            ),
+            threshold=drift_params['threshold'], mode=drift_params['filter_method'],
+        )
+        well_corr, coords, _ = correct_well(well_tmp,
                                         coords=[] if len(background_coords) == 0 else background_coords[name],
-                                        threshold=preprocessing_params['drift_correction']['threshold'],
-                                        mode=preprocessing_params['drift_correction']['filter_method'])
+                                        threshold=drift_params['threshold'],
+                                        mode=drift_params['filter_method'])
+        jump_summary = {"samples": 0, "frames": 0}
+        if drift_params.get('frame_jump_correction', True):
+            well_corr, jump_summary = interpolate_frame_jumps(
+                well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
+            )
         well_data[name] = well_corr
         filter_ptss[name] = coords
         if progress_callback is not None:
-            progress_callback(done, len(WELL_NAMES), f"Preprocessed well {name}")
+            correction_text = ""
+            if jump_summary["samples"]:
+                correction_text = (
+                    f"; corrected {jump_summary['samples']} jump samples "
+                    f"in {jump_summary['frames']} frames"
+                )
+            progress_callback(done, len(WELL_NAMES), f"Preprocessed well {name}{correction_text}")
     if progress_callback is None:
         print("Parsing finished!")
     return well_data, time, phases, filter_ptss, selected_range
@@ -156,19 +177,22 @@ def localization(
     )
     for done, name in enumerate(well_names, start=1):
         border_filter = border_filter_for_well(localization_params, name)
-        well_tmp = wells[name]
+        well_tmp = wells[name][slicer]
         
-        if preprocessing_params['drift_correction']['inter_phase_correction']:
-            well_tmp = correct_interphase_well_shifts(well_tmp, phases, 
-                                            coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
-                                            threshold=preprocessing_params['drift_correction']['threshold'],
-                                            mode=preprocessing_params['drift_correction']['filter_method'])
+        drift_params = preprocessing_params['drift_correction']
+        well_tmp = correct_interphase_well_shifts(well_tmp, phases,
+                                        coords=[] if not drift_params['background_selector'] else background_coords[name],
+                                        threshold=drift_params['threshold'],
+                                        mode=drift_params['filter_method'])
         
-        well_tmp = well_tmp[slicer]
         well_corr, filter_ptss, mask = correct_well(well_tmp, 
-                                            coords=[] if not preprocessing_params['drift_correction']['background_selector'] else background_coords[name],
-                                            threshold=preprocessing_params['drift_correction']['threshold'],
-                                            mode=preprocessing_params['drift_correction']['filter_method'])
+                                            coords=[] if not drift_params['background_selector'] else background_coords[name],
+                                            threshold=drift_params['threshold'],
+                                            mode=drift_params['filter_method'])
+        if drift_params.get('frame_jump_correction', True):
+            well_corr, _ = interpolate_frame_jumps(
+                well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
+            )
         
         ptss = calculate_cell_maximas(well_corr, 
                     min_threshold=localization_params['threshold_range'][0], 
@@ -209,7 +233,7 @@ def parse_selection(well_data:dict, selector: Any, evaluation_params:dict) -> (d
                 selected_ptss[name] = ptss_selected
     return selected_ptss
 
-def watershed_segmentation(well, coords, ws_threshold, distance_threshold = np.inf, mask = None):
+def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np.inf, mask=None):
     if well.ndim == 3:
         well_img = np.max(well, axis=0)
     elif well.ndim != 2:
