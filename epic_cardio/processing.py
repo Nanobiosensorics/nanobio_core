@@ -1,7 +1,8 @@
 from operator import itemgetter
+from dataclasses import dataclass
 import numpy as np
 import os
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 from .data_correction import correct_well, correct_interphase_well_shifts, interpolate_frame_jumps
 from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
@@ -15,6 +16,15 @@ from tqdm import tqdm
 class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
+
+
+@dataclass(frozen=True)
+class WatershedResult:
+    labels: np.ndarray
+    foreground_mask: np.ndarray
+    active_labels: np.ndarray
+    unresolved_labels: np.ndarray
+    pixel_counts: Dict[int, int]
 
 def load_data(path, measurement_type=MeasurementType.TYPE_NORMAL, flip=[False, False]):
     try:
@@ -233,6 +243,72 @@ def parse_selection(well_data:dict, selector: Any, evaluation_params:dict) -> (d
                 selected_ptss[name] = ptss_selected
     return selected_ptss
 
+def threshold_bounded_watershed(signal, projected_labels, threshold=160,
+                                max_growth_distance=None):
+    """Run marker-controlled watershed inside a strict threshold foreground.
+
+    ``projected_labels`` supplies stable cell identities and their spatial
+    reference footprints. Pixels at or below ``threshold`` are authoritative
+    background and are never promoted to foreground by the marker image.
+    """
+    signal_img = np.asarray(signal)
+    if signal_img.ndim == 3:
+        signal_img = np.max(signal_img, axis=0)
+    elif signal_img.ndim != 2:
+        raise ValueError("Input signal data must be a 2D or 3D numpy array.")
+
+    reference_labels = np.asarray(projected_labels)
+    if reference_labels.ndim != 2 or reference_labels.shape != signal_img.shape:
+        raise ValueError("Projected labels must be a 2D array matching the signal shape.")
+    if not np.issubdtype(reference_labels.dtype, np.integer):
+        if not np.all(np.isfinite(reference_labels)) or not np.all(reference_labels == np.rint(reference_labels)):
+            raise ValueError("Projected labels must contain finite integer values.")
+    reference_labels = reference_labels.astype(np.int32, copy=False)
+    if np.any(reference_labels < 0):
+        raise ValueError("Projected labels must be non-negative.")
+
+    threshold = float(threshold)
+    if not np.isfinite(threshold):
+        raise ValueError("Watershed threshold must be finite.")
+    if max_growth_distance is not None:
+        max_growth_distance = float(max_growth_distance)
+        if not np.isfinite(max_growth_distance) or max_growth_distance < 0:
+            raise ValueError("Maximum watershed growth distance must be finite and non-negative.")
+
+    signal_img = signal_img.astype(np.float32, copy=False)
+    foreground = np.isfinite(signal_img) & (signal_img > threshold)
+    markers = np.where(foreground, reference_labels, 0).astype(np.int32, copy=False)
+    requested_labels = np.unique(reference_labels)
+    requested_labels = requested_labels[requested_labels > 0].astype(np.int32, copy=False)
+    active_labels = np.unique(markers)
+    active_labels = active_labels[active_labels > 0].astype(np.int32, copy=False)
+    unresolved_labels = np.setdiff1d(requested_labels, active_labels, assume_unique=True)
+
+    if active_labels.size == 0:
+        labels = np.zeros(signal_img.shape, dtype=np.int32)
+    else:
+        elevation = np.where(np.isfinite(signal_img), -signal_img, 0.0)
+        labels = watershed(elevation, markers, mask=foreground).astype(np.int32, copy=False)
+
+    if max_growth_distance is not None and active_labels.size > 0:
+        for label_id in active_labels.tolist():
+            distance = distance_transform_edt(reference_labels != int(label_id))
+            labels[(labels == int(label_id)) & (distance > max_growth_distance)] = 0
+
+    labels[~foreground] = 0
+    pixel_counts = {
+        int(label_id): int(np.count_nonzero(labels == int(label_id)))
+        for label_id in requested_labels.tolist()
+    }
+    return WatershedResult(
+        labels=labels,
+        foreground_mask=foreground,
+        active_labels=active_labels,
+        unresolved_labels=unresolved_labels,
+        pixel_counts=pixel_counts,
+    )
+
+
 def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np.inf, mask=None):
     if well.ndim == 3:
         well_img = np.max(well, axis=0)
@@ -241,48 +317,20 @@ def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np
     else:
         well_img = well.copy()
     
-    well_img = well_img.clip(min=0)
-    well_img[well_img < 0] = 0
-    bn = np.zeros(well_img.shape)
-    bn[well_img > ws_threshold] = 1
-    centroid_mask = np.zeros(well_img.shape, dtype=int)
-    
+    marker_labels = np.zeros(well_img.shape, dtype=np.int32)
     coords_idx = np.rint(coords).astype(np.int32)
     coords_idx[:, 0] = np.clip(coords_idx[:, 0], 0, well_img.shape[1] - 1)
     coords_idx[:, 1] = np.clip(coords_idx[:, 1], 0, well_img.shape[0] - 1)
-
-    for i in range(coords_idx.shape[0]):
-        if mask is not None:
-            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = mask[coords_idx[i, 1], coords_idx[i, 0]]
-        else:
-            centroid_mask[coords_idx[i, 1], coords_idx[i, 0]] = i + 1
-    
     if mask is not None:
-        bn[mask > 0] = 1
-        
-    distance_mask = distance_transform_edt(np.logical_not(centroid_mask))
-        
-    bn[distance_mask > distance_threshold] = 0
-    im_watershed = watershed(-well_img, centroid_mask if mask is None else mask, mask=bn)
-    im_watershed *= bn.astype(int)
+        marker_labels = np.asarray(mask, dtype=np.int32)
+    else:
+        for i, (x_coord, y_coord) in enumerate(coords_idx):
+            marker_labels[y_coord, x_coord] = i + 1
 
-    # ensure pixels stay assigned only when within the distance threshold of their own centroid
-    y_indices, x_indices = np.indices(well_img.shape)
-    threshold_sq = distance_threshold ** 2
-
-    for i in range(coords_idx.shape[0]):
-        centroid_x, centroid_y = coords_idx[i, 0], coords_idx[i, 1]
-        label_id = centroid_mask[centroid_y, centroid_x]
-        label_mask = im_watershed == label_id
-
-        if not np.any(label_mask):
-            continue
-
-        dist_sq = (x_indices - centroid_x) ** 2 + (y_indices - centroid_y) ** 2
-        too_far = (dist_sq > threshold_sq) & label_mask
-
-        if np.any(too_far):
-            im_watershed[too_far] = 0
-            bn[too_far] = 0
-
-    return im_watershed
+    max_growth_distance = None if np.isinf(distance_threshold) else distance_threshold
+    return threshold_bounded_watershed(
+        well_img,
+        marker_labels,
+        threshold=ws_threshold,
+        max_growth_distance=max_growth_distance,
+    ).labels

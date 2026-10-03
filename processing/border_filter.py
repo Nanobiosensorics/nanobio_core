@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from nanobio_core.epic_cardio.defs import WELL_NAMES
+from ..epic_cardio.defs import WELL_NAMES
 
 
 def default_border_filter() -> Dict[str, int]:

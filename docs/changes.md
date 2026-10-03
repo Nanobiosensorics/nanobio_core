@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-10-03
+
+- Valid empty microscope label TIFFs restore as empty candidate sets, allowing
+  nuclei-filtered wells with no eligible cells to remain in saved datasets.
+- Label TIFF decoding uses tifffile, including ZSTD-compressed edited masks.
+- Core environment dependencies explicitly include tifffile and imagecodecs
+  for compressed label-mask restoration.
+
+## 2026-10-01
+
+- Added a shared threshold-bounded watershed result API. The intensity threshold now defines
+  authoritative background, microscope labels below threshold remain unresolved instead of being
+  forced into the foreground, and optional growth limits are measured from each projected label
+  footprint. The legacy watershed entrypoint delegates to the same implementation.
+- Use package-relative imports in processing helpers so saved preprocessing can run
+  when core is imported through the evaluation repository's `src` package.
+
 ## 2026-09-24
 
 - Kept fixed preprocessing behavior in core method defaults: invalid-pixel filtering and inter-phase
@@ -22,3 +39,5 @@
 - Added `build_microscope_cell_image_data(...)` to construct selected-cell microscope crops, aligned EPIC overlays, focused-cell contours, and strategy-pixel contours without depending on Qt.
 - Unified microscope strategy-pixel selection for GUI and export crops so `cover`, `max`, and `watershed` contours use the same focused-cell overlap and fallback rules.
 - Added clamped overlay-alpha data to microscope single-cell export payloads so callers can reproduce GUI overlay opacity.
+
+- Added a read-only v1–v5 microscope project adapter with independent image/mask roots, active/channel/composite selection and fingerprint validation. Synchronized package-relative processing imports across embedded checkouts.

@@ -123,6 +123,13 @@ def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None)
         else:
             mask = np.asarray(payload)
         mask = np.squeeze(mask)
+    elif suffix in {'.tif', '.tiff'}:
+        import tifffile
+        try:
+            mask = tifffile.imread(path)
+        except (OSError, ValueError, RuntimeError) as exc:
+            _log(f"Could not decode label TIFF {path}: {exc}", log_callback)
+            return None
     else:
         mask = _read_cv2_any_path(path, cv2.IMREAD_UNCHANGED, "mask", log_callback)
     _log(f"mask read finished in {time.perf_counter() - t0:.3f}s: {path.name}", log_callback)
@@ -202,20 +209,12 @@ def _load_well_files(
         )
         _log(f"{well}: shape mismatch", log_callback)
         return False
-    if np.max(mask) <= 0:
-        errors.append(f"{well}: mask contains no positive labels")
-        _log(f"{well}: mask has no positive labels", log_callback)
-        return False
 
     t_centroids = time.perf_counter()
     centroids = calculate_microscope_cell_centroids(mask)
     centroid_labels = np.unique(mask)
     centroid_labels = centroid_labels[centroid_labels > 0].astype(np.int32, copy=False)
     _log(f"{well}: centroid extraction finished in {time.perf_counter() - t_centroids:.3f}s", log_callback)
-    if centroids.size == 0:
-        errors.append(f"{well}: no centroids extracted from mask")
-        _log(f"{well}: no centroids extracted", log_callback)
-        return False
     if len(centroid_labels) != len(centroids):
         errors.append(
             f"{well}: centroid/label count mismatch centroids={len(centroids)} labels={len(centroid_labels)}"

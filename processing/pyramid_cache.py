@@ -5,7 +5,7 @@ from typing import Dict
 import cv2
 import numpy as np
 
-from nanobio_core.cache import HybridPartitionCache
+from ..cache import HybridPartitionCache
 
 
 def build_pyramid(base_image: np.ndarray) -> Dict[float, np.ndarray]:
