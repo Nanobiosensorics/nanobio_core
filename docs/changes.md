@@ -41,3 +41,5 @@
 - Added clamped overlay-alpha data to microscope single-cell export payloads so callers can reproduce GUI overlay opacity.
 
 - Added a read-only v1–v5 microscope project adapter with independent image/mask roots, active/channel/composite selection and fingerprint validation. Synchronized package-relative processing imports across embedded checkouts.
+
+- Removed unused fixed-resolution microscope pyramid caching and its public exports. Current consumers render native source regions at viewport resolution.
