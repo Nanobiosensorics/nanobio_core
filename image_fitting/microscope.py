@@ -344,8 +344,8 @@ def project_mic_centroids_to_epic(centroids: np.ndarray, translation: np.ndarray
 def project_mask_to_epic(mask: np.ndarray, translation: np.ndarray, scale: int, out_shape: Tuple[int, int] = (80, 80)) -> np.ndarray:
     sx = 80.0 / float(scale)
     sy = 80.0 / float(scale)
-    tx = -float(translation[0]) * sx
-    ty = -float(translation[1]) * sy
+    tx = -float(translation[0]) * sx + (sx - 1.0) / 2.0
+    ty = -float(translation[1]) * sy + (sy - 1.0) / 2.0
     affine = np.array([[sx, 0.0, tx], [0.0, sy, ty]], dtype=np.float32)
     projected = cv2.warpAffine(
         mask.astype(np.int32, copy=False),
@@ -356,6 +356,38 @@ def project_mask_to_epic(mask: np.ndarray, translation: np.ndarray, scale: int, 
         borderValue=0,
     )
     return projected.astype(np.int32, copy=False)
+
+
+def project_mask_pixel_sets(mask: np.ndarray, translation: np.ndarray, scale: int,
+                            out_shape: Tuple[int, int] = (80, 80)) -> dict[int, np.ndarray]:
+    """Return every sensor pixel overlapping each source label, including shared pixels.
+
+    Center-sampled label projection cannot represent small objects or several
+    labels sharing a sensor pixel. Inspect translated sensor footprints instead;
+    positive-area overlap of any labeled source pixel qualifies for coverage.
+    """
+    labels = np.asarray(mask)
+    offset = np.asarray(translation, dtype=float)
+    if labels.ndim != 2 or offset.shape != (2,) or not np.isfinite(offset).all():
+        raise ValueError("Mask must be 2D and translation must contain finite (x, y) coordinates.")
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Projection scale must be finite and positive.")
+    step = float(scale) / 80.0
+    coverage = {}
+    for y in range(out_shape[0]):
+        y0 = max(0, int(np.floor(offset[1] + y * step)))
+        y1 = min(labels.shape[0], int(np.ceil(offset[1] + (y + 1) * step)))
+        if y1 <= y0:
+            continue
+        for x in range(out_shape[1]):
+            x0 = max(0, int(np.floor(offset[0] + x * step)))
+            x1 = min(labels.shape[1], int(np.ceil(offset[0] + (x + 1) * step)))
+            if x1 <= x0:
+                continue
+            for label_id in np.unique(labels[y0:y1, x0:x1]):
+                if label_id > 0:
+                    coverage.setdefault(int(label_id), []).append((x, y))
+    return {label_id: np.asarray(coords, dtype=np.int32) for label_id, coords in coverage.items()}
 
 
 def run_auto_translation(

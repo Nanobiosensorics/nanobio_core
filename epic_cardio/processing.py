@@ -9,8 +9,7 @@ from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *
 import json
-from skimage.segmentation import watershed
-from scipy.ndimage import distance_transform_edt, distance_transform_cdt
+from scipy.ndimage import distance_transform_edt, label as label_connected
 from tqdm import tqdm
 
 class RangeType():
@@ -244,12 +243,17 @@ def parse_selection(well_data:dict, selector: Any, evaluation_params:dict) -> (d
     return selected_ptss
 
 def threshold_bounded_watershed(signal, projected_labels, threshold=160,
-                                max_growth_distance=None):
+                                max_growth_distance=None, seed_points=None, seed_regions=None):
     """Run marker-controlled watershed inside a strict threshold foreground.
 
     ``projected_labels`` supplies stable cell identities and their spatial
     reference footprints. Pixels at or below ``threshold`` are authoritative
     background and are never promoted to foreground by the marker image.
+    Each overlapping label gets one seed near its optional ``seed_points``
+    coordinate. Each connected foreground component is partitioned by distance
+    to the full projected ``seed_regions`` footprint. Centroid distance resolves
+    equal footprint distances. Disconnected foreground without an eligible seed
+    stays unlabeled. Growth is unlimited by default.
     """
     signal_img = np.asarray(signal)
     if signal_img.ndim == 3:
@@ -277,9 +281,49 @@ def threshold_bounded_watershed(signal, projected_labels, threshold=160,
 
     signal_img = signal_img.astype(np.float32, copy=False)
     foreground = np.isfinite(signal_img) & (signal_img > threshold)
-    markers = np.where(foreground, reference_labels, 0).astype(np.int32, copy=False)
+    components, component_count = label_connected(foreground)
+    markers = np.zeros(reference_labels.shape, dtype=np.int32)
     requested_labels = np.unique(reference_labels)
     requested_labels = requested_labels[requested_labels > 0].astype(np.int32, copy=False)
+    regions = {
+        int(label_id): np.column_stack(np.nonzero(reference_labels == int(label_id))[::-1]).astype(np.int32)
+        for label_id in requested_labels.tolist()
+    }
+    if seed_regions is not None:
+        for label_id, coordinates in seed_regions.items():
+            coords = np.asarray(coordinates)
+            if coords.size == 0:
+                regions[int(label_id)] = np.empty((0, 2), dtype=np.int32)
+                continue
+            if coords.ndim != 2 or coords.shape[1] != 2 or not np.isfinite(coords).all():
+                raise ValueError("Watershed seed regions must contain finite (x, y) coordinates.")
+            coords = np.unique(np.rint(coords).astype(np.int32), axis=0)
+            valid = ((coords[:, 0] >= 0) & (coords[:, 0] < signal_img.shape[1])
+                     & (coords[:, 1] >= 0) & (coords[:, 1] < signal_img.shape[0]))
+            regions[int(label_id)] = coords[valid]
+        requested_labels = np.asarray(sorted(set(requested_labels.tolist()) | set(regions)), dtype=np.int32)
+
+    for label_id in requested_labels.tolist():
+        region = regions.get(label_id, np.empty((0, 2), dtype=np.int32))
+        if region.size == 0:
+            continue
+        eligible = region[foreground[region[:, 1], region[:, 0]]]
+        if eligible.size == 0:
+            continue
+        point = np.asarray((seed_points or {}).get(label_id, region.mean(axis=0)), dtype=float)
+        if point.shape != (2,) or not np.isfinite(point).all():
+            raise ValueError("Watershed seed points must be finite (x, y) coordinates.")
+        distances = ((eligible[:, 0] - point[0]) ** 2 + (eligible[:, 1] - point[1]) ** 2)
+        nearest_eligible = eligible[int(np.argmin(distances))]
+        component_id = int(components[nearest_eligible[1], nearest_eligible[0]])
+        available = eligible[markers[eligible[:, 1], eligible[:, 0]] == 0]
+        if available.size == 0:
+            ys, xs = np.nonzero((components == component_id) & (markers == 0))
+            available = np.column_stack([xs, ys])
+        if available.size:
+            nearest = np.argmin((available[:, 0] - point[0]) ** 2 + (available[:, 1] - point[1]) ** 2)
+            x, y = available[int(nearest)]
+            markers[y, x] = label_id
     active_labels = np.unique(markers)
     active_labels = active_labels[active_labels > 0].astype(np.int32, copy=False)
     unresolved_labels = np.setdiff1d(requested_labels, active_labels, assume_unique=True)
@@ -287,12 +331,43 @@ def threshold_bounded_watershed(signal, projected_labels, threshold=160,
     if active_labels.size == 0:
         labels = np.zeros(signal_img.shape, dtype=np.int32)
     else:
-        elevation = np.where(np.isfinite(signal_img), -signal_img, 0.0)
-        labels = watershed(elevation, markers, mask=foreground).astype(np.int32, copy=False)
+        labels = np.zeros(signal_img.shape, dtype=np.int32)
+        for component_id in range(1, component_count + 1):
+            ys, xs = np.nonzero(components == component_id)
+            seed_y, seed_x = np.nonzero((components == component_id) & (markers > 0))
+            if seed_x.size == 0:
+                continue
+            seed_labels = markers[seed_y, seed_x]
+            order = np.argsort(seed_labels, kind="stable")
+            seed_x, seed_y, seed_labels = seed_x[order], seed_y[order], seed_labels[order]
+            seed_coordinates = np.asarray([
+                (seed_points or {}).get(int(label_id), [x, y])
+                for label_id, x, y in zip(seed_labels, seed_x, seed_y)
+            ], dtype=float)
+            best_region = np.full(xs.shape, np.inf)
+            best_centroid = np.full(xs.shape, np.inf)
+            owners = np.zeros(xs.shape, dtype=np.int32)
+            for label_id, centroid in zip(seed_labels, seed_coordinates):
+                region = regions[int(label_id)]
+                region_distance = np.min(
+                    (xs[:, None] - region[None, :, 0]) ** 2
+                    + (ys[:, None] - region[None, :, 1]) ** 2,
+                    axis=1,
+                )
+                centroid_distance = ((xs - centroid[0]) ** 2 + (ys - centroid[1]) ** 2)
+                replace = ((region_distance < best_region)
+                           | ((region_distance == best_region) & (centroid_distance < best_centroid)))
+                owners[replace] = int(label_id)
+                best_region[replace] = region_distance[replace]
+                best_centroid[replace] = centroid_distance[replace]
+            labels[ys, xs] = owners
 
     if max_growth_distance is not None and active_labels.size > 0:
         for label_id in active_labels.tolist():
-            distance = distance_transform_edt(reference_labels != int(label_id))
+            footprint = np.zeros(reference_labels.shape, dtype=bool)
+            region = regions[int(label_id)]
+            footprint[region[:, 1], region[:, 0]] = True
+            distance = distance_transform_edt(~footprint)
             labels[(labels == int(label_id)) & (distance > max_growth_distance)] = 0
 
     labels[~foreground] = 0

@@ -1,5 +1,21 @@
 # Changes
 
+- Replaced foreground-distance watershed basins with deterministic nearest-cover
+  partitioning inside each connected threshold component. The complete projected
+  cell footprint sets ownership distance; centroid distance breaks footprint ties.
+  Signal intensity only defines foreground and does not move cell boundaries.
+
+- Added label-specific sensor coverage projection using positive-area overlap
+  with source mask pixels. Unlike a center-sampled label image, these pixel sets
+  retain small labels and represent shared coverage without replacing label IDs.
+
+- Watershed uses one centroid-guided seed per overlapping label and the foreground
+  distance transform for separation. Optional `seed_points` map stable label IDs to
+  projected `(x, y)` coordinates; seed collisions use the nearest available footprint
+  pixel. Strict threshold background and optional growth bounds are preserved.
+  Microscope mask projection now samples sensor-pixel centers rather than corners,
+  eliminating a half-sensor-pixel offset from projected cell centroids.
+
 ## 2026-10-03
 
 - Valid empty microscope label TIFFs restore as empty candidate sets, allowing
