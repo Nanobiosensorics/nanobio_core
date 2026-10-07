@@ -10,6 +10,7 @@ from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_
 from .defs import *
 import json
 from scipy.ndimage import distance_transform_edt, label as label_connected
+from skimage.segmentation import watershed
 from tqdm import tqdm
 
 class RangeType():
@@ -382,6 +383,54 @@ def threshold_bounded_watershed(signal, projected_labels, threshold=160,
         unresolved_labels=unresolved_labels,
         pixel_counts=pixel_counts,
     )
+
+
+def subpixel_watershed(signal, microscope_mask, translation, scale, threshold=160,
+                       max_growth_distance=None, subdivisions=8):
+    """Partition sensor foreground by complete microscope footprints on a finer grid.
+
+    Sensor values are repeated without interpolation. Native labels become full
+    region seeds; flat watershed grows them through four-neighbour foreground
+    paths, never across background gaps. Fractions use the entire sensor area
+    as denominator.
+    """
+    from ..image_fitting.microscope import project_mask_to_epic
+
+    signal = np.asarray(signal, dtype=np.float32)
+    if signal.ndim != 2 or subdivisions < 1:
+        raise ValueError("Signal must be 2D and subdivisions must be positive.")
+    factor = int(subdivisions)
+    foreground = np.isfinite(signal) & (signal > float(threshold))
+    fine_foreground = np.repeat(np.repeat(foreground, factor, axis=0), factor, axis=1)
+    projected = project_mask_to_epic(microscope_mask, translation, scale, fine_foreground.shape)
+    components, count = label_connected(fine_foreground)
+    owners = np.zeros(projected.shape, dtype=np.int32)
+    for component_id in range(1, count + 1):
+        ys, xs = np.nonzero(components == component_id)
+        if not len(xs):
+            continue
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        component = components[y0:y1, x0:x1] == component_id
+        seeds = np.where(component, projected[y0:y1, x0:x1], 0)
+        if not np.any(seeds):
+            continue
+        assigned = watershed(np.zeros(component.shape, dtype=np.uint8), seeds,
+                             mask=component, connectivity=1)
+        keep = component
+        if max_growth_distance is not None:
+            distances = distance_transform_edt(seeds == 0)
+            keep = keep & (distances <= float(max_growth_distance) * factor)
+        owners[y0:y1, x0:x1][keep] = assigned[keep]
+    participation = {}
+    for y in range(signal.shape[0]):
+        for x in range(signal.shape[1]):
+            block = owners[y * factor:(y + 1) * factor, x * factor:(x + 1) * factor]
+            label_ids, counts = np.unique(block[block > 0], return_counts=True)
+            for label_id, area in zip(label_ids.tolist(), counts.tolist()):
+                participation.setdefault(int(label_id), []).append((x, y, area / float(factor * factor)))
+    return owners, {
+        label_id: np.asarray(rows, dtype=np.float32) for label_id, rows in participation.items()
+    }
 
 
 def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np.inf, mask=None):

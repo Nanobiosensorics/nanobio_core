@@ -1,5 +1,30 @@
 # Changes
 
+- Fractional watershed now expands full-region seeds through four-neighbour
+  threshold-foreground paths using flat marker-controlled watershed. Labels
+  cannot take shortcuts across background gaps in a connected region; the
+  intensity defines the boundary, not the separation gradient.
+
+- Corrected fractional watershed: partition connected threshold foreground on a
+  640×640 grid using complete microscope regions as seeds and direct foreground
+  contact paths. Sensor participation is the fraction of its 64 subpixels
+  assigned to each cell, including growth beyond the original mask. Unseeded
+  foreground remains empty, and the optional growth cap is enforced on this
+  partition. The same cached labels drive well overlays and GUI/export outlines.
+- Corrected exact mask-area projection at fractional sensor boundaries and
+  standardized native crop sampling to pixel centers and sensor-edge indexing.
+  IWS exports use `sum(signal × watershed participation)`; physical IWS in
+  analysis additionally multiplies by the sensor pixel area. The fine partition
+  has an 8×8 sampling precision per sensor pixel; existing CSVs require re-export.
+
+- Added native-mask sensor-pixel participation projection. Each label retains
+  its fractional occupied area when several high-resolution cells map to one
+  Cardio pixel, and signal aggregation accepts weighted `(x, y, fraction)`
+  regions for area-proportional integrated IWS.
+
+- Generalized labeled-mask projection to honor the requested output shape and
+  clipped watershed single-cell outlines to the native high-resolution label.
+
 - Replaced foreground-distance watershed basins with deterministic nearest-cover
   partitioning inside each connected threshold component. The complete projected
   cell footprint sets ownership distance; centroid distance breaks footprint ties.

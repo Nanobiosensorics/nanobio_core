@@ -342,8 +342,8 @@ def project_mic_centroids_to_epic(centroids: np.ndarray, translation: np.ndarray
 
 
 def project_mask_to_epic(mask: np.ndarray, translation: np.ndarray, scale: int, out_shape: Tuple[int, int] = (80, 80)) -> np.ndarray:
-    sx = 80.0 / float(scale)
-    sy = 80.0 / float(scale)
+    sx = float(out_shape[1]) / float(scale)
+    sy = float(out_shape[0]) / float(scale)
     tx = -float(translation[0]) * sx + (sx - 1.0) / 2.0
     ty = -float(translation[1]) * sy + (sy - 1.0) / 2.0
     affine = np.array([[sx, 0.0, tx], [0.0, sy, ty]], dtype=np.float32)
@@ -388,6 +388,55 @@ def project_mask_pixel_sets(mask: np.ndarray, translation: np.ndarray, scale: in
                 if label_id > 0:
                     coverage.setdefault(int(label_id), []).append((x, y))
     return {label_id: np.asarray(coords, dtype=np.int32) for label_id, coords in coverage.items()}
+
+
+def project_mask_pixel_participation(mask: np.ndarray, translation: np.ndarray, scale: int,
+                                     out_shape: Tuple[int, int] = (80, 80)) -> dict[int, np.ndarray]:
+    """Return sensor coordinates and fractional area occupied by each source label.
+
+    Each row is ``(x, y, fraction)``. Fractions are calculated from the native
+    labeled-mask samples inside a sensor footprint, so labels that share one
+    low-resolution sensor pixel retain independent, area-proportional signal
+    contributions instead of competing for exclusive ownership of that pixel.
+    """
+    labels = np.asarray(mask)
+    offset = np.asarray(translation, dtype=float)
+    if labels.ndim != 2 or offset.shape != (2,) or not np.isfinite(offset).all():
+        raise ValueError("Mask must be 2D and translation must contain finite (x, y) coordinates.")
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Projection scale must be finite and positive.")
+
+    step_x = float(scale) / float(out_shape[1])
+    step_y = float(scale) / float(out_shape[0])
+    participation: dict[int, list[tuple[float, float, float]]] = {}
+    for y in range(out_shape[0]):
+        source_y0 = int(np.floor(offset[1] + y * step_y))
+        source_y1 = int(np.ceil(offset[1] + (y + 1) * step_y))
+        y0 = max(0, source_y0)
+        y1 = min(labels.shape[0], source_y1)
+        if y1 <= y0:
+            continue
+        for x in range(out_shape[1]):
+            source_x0 = int(np.floor(offset[0] + x * step_x))
+            source_x1 = int(np.ceil(offset[0] + (x + 1) * step_x))
+            x0 = max(0, source_x0)
+            x1 = min(labels.shape[1], source_x1)
+            if x1 <= x0:
+                continue
+            footprint = labels[y0:y1, x0:x1]
+            x_weights = np.maximum(0.0, np.minimum(np.arange(x0, x1) + 1, offset[0] + (x + 1) * step_x)
+                                   - np.maximum(np.arange(x0, x1), offset[0] + x * step_x))
+            y_weights = np.maximum(0.0, np.minimum(np.arange(y0, y1) + 1, offset[1] + (y + 1) * step_y)
+                                   - np.maximum(np.arange(y0, y1), offset[1] + y * step_y))
+            pixel_areas = y_weights[:, None] * x_weights[None, :]
+            for label_id in np.unique(footprint[footprint > 0]).tolist():
+                fraction = float(np.sum(pixel_areas[footprint == label_id]) / (step_x * step_y))
+                if fraction > 0:
+                    participation.setdefault(int(label_id), []).append((float(x), float(y), fraction))
+    return {
+        label_id: np.asarray(rows, dtype=np.float32)
+        for label_id, rows in participation.items()
+    }
 
 
 def run_auto_translation(
