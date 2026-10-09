@@ -22,6 +22,20 @@ class MicroscopeCellImageData:
     overlay_alpha: float = 0.35
 
 
+def pixel_coordinates_and_weights(pixel_set: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Normalize ``(x, y)`` or weighted ``(x, y, participation)`` rows."""
+    values = np.asarray(pixel_set)
+    if values.ndim != 2 or values.shape[1] < 2 or values.shape[0] == 0:
+        return np.empty((0, 2), dtype=np.int32), np.empty((0,), dtype=np.float32)
+    coords = np.rint(values[:, :2]).astype(np.int32)
+    weights = (
+        np.asarray(values[:, 2], dtype=np.float32)
+        if values.shape[1] >= 3
+        else np.ones(values.shape[0], dtype=np.float32)
+    )
+    return coords, np.clip(weights, 0.0, 1.0)
+
+
 def extract_signal_lines(
     ptss_selected: np.ndarray,
     pre_cube: np.ndarray,
@@ -36,15 +50,16 @@ def extract_signal_lines(
 
     for idx in range(ptss_selected.shape[0]):
         if use_pixel_sets:
-            coords = np.asarray(pixel_sets[idx], dtype=np.int32)
-            if coords.ndim != 2 or coords.shape[1] != 2 or coords.shape[0] == 0:
+            coords, weights = pixel_coordinates_and_weights(pixel_sets[idx])
+            if coords.shape[0] == 0:
                 coords = np.asarray([[ptss_selected[idx, 0], ptss_selected[idx, 1]]], dtype=np.int32)
+                weights = np.ones(1, dtype=np.float32)
             xs = np.clip(coords[:, 0], 0, pre_cube.shape[2] - 1)
             ys = np.clip(coords[:, 1], 0, pre_cube.shape[1] - 1)
             pre_values = pre_cube[:, ys, xs]
             raw_values = raw_cube[:, ys, xs]
             lines_selected.append(np.max(pre_values, axis=1))
-            lines_integrated.append(np.sum(pre_values, axis=1))
+            lines_integrated.append(np.sum(pre_values * weights[None, :], axis=1))
             raw_lines_selected.append(np.max(raw_values, axis=1))
             continue
 
@@ -85,31 +100,38 @@ def combine_pixel_sets(pixel_sets: Iterable[np.ndarray] | None) -> np.ndarray:
     if pixel_sets is None:
         return np.empty((0, 2), dtype=np.int32)
 
-    merged: List[np.ndarray] = []
-    for coords in pixel_sets:
-        arr = np.asarray(coords, dtype=np.int32)
-        if arr.ndim != 2 or arr.shape[1] != 2 or arr.shape[0] == 0:
+    totals: dict[tuple[int, int], float] = {}
+    weighted = False
+    for pixel_set in pixel_sets:
+        values = np.asarray(pixel_set)
+        coords, weights = pixel_coordinates_and_weights(values)
+        if coords.shape[0] == 0:
             continue
-        merged.append(arr)
+        weighted = weighted or (values.ndim == 2 and values.shape[1] >= 3)
+        for (x, y), weight in zip(coords.tolist(), weights.tolist()):
+            key = (int(x), int(y))
+            totals[key] = min(1.0, totals.get(key, 0.0) + float(weight))
 
-    if not merged:
+    if not totals:
         return np.empty((0, 2), dtype=np.int32)
-
-    return np.unique(np.vstack(merged), axis=0).astype(np.int32, copy=False)
+    rows = sorted(totals.items())
+    if weighted:
+        return np.asarray([[x, y, weight] for (x, y), weight in rows], dtype=np.float32)
+    return np.asarray([[x, y] for (x, y), _weight in rows], dtype=np.int32)
 
 
 def aggregate_signal_for_pixel_set(
     pre_cube: np.ndarray,
     pixel_set: np.ndarray,
 ) -> np.ndarray:
-    coords = np.asarray(pixel_set, dtype=np.int32)
-    if pre_cube.ndim != 3 or pre_cube.size == 0 or coords.ndim != 2 or coords.shape[1] != 2 or coords.shape[0] == 0:
+    coords, weights = pixel_coordinates_and_weights(pixel_set)
+    if pre_cube.ndim != 3 or pre_cube.size == 0 or coords.shape[0] == 0:
         return np.empty((0,), dtype=np.float32)
 
     xs = np.clip(coords[:, 0], 0, pre_cube.shape[2] - 1)
     ys = np.clip(coords[:, 1], 0, pre_cube.shape[1] - 1)
     values = np.asarray(pre_cube[:, ys, xs], dtype=np.float32)
-    return np.sum(values, axis=1, dtype=np.float32)
+    return np.sum(values * weights[None, :], axis=1, dtype=np.float32)
 
 
 def build_microscope_cell_image_data(
@@ -123,6 +145,7 @@ def build_microscope_cell_image_data(
     aligned_rect: Optional[Tuple[float, float, float, float]] = None,
     strategy_pixel_set: Optional[np.ndarray] = None,
     strategy: str = "max",
+    strategy_labels: Optional[np.ndarray] = None,
     overlay_limits: Optional[Tuple[float, float]] = None,
     overlay_alpha: float = 0.35,
 ) -> Optional[MicroscopeCellImageData]:
@@ -189,21 +212,21 @@ def build_microscope_cell_image_data(
 
             crop_h, crop_w = crop_mask.shape
             yy, xx = np.indices((crop_h, crop_w), dtype=np.float32)
-            norm_x = (float(x0) + xx - rect_x) / rect_w
-            norm_y = (float(y0) + yy - rect_y) / rect_h
+            norm_x = (float(x0) + xx + 0.5 - rect_x) / rect_w
+            norm_y = (float(y0) + yy + 0.5 - rect_y) / rect_h
             valid = (
                 (norm_x >= 0.0)
-                & (norm_x <= 1.0)
+                & (norm_x < 1.0)
                 & (norm_y >= 0.0)
-                & (norm_y <= 1.0)
+                & (norm_y < 1.0)
             )
             epic_x = np.clip(
-                np.rint(norm_x * (epic.shape[1] - 1)).astype(np.int32),
+                np.floor(norm_x * epic.shape[1]).astype(np.int32),
                 0,
                 epic.shape[1] - 1,
             )
             epic_y = np.clip(
-                np.rint(norm_y * (epic.shape[0] - 1)).astype(np.int32),
+                np.floor(norm_y * epic.shape[0]).astype(np.int32),
                 0,
                 epic.shape[0] - 1,
             )
@@ -211,13 +234,13 @@ def build_microscope_cell_image_data(
             overlay_crop[valid] = epic[epic_y[valid], epic_x[valid]]
             flat_ids = epic_y * epic.shape[1] + epic_x
 
-            coords = (
+            coords, _weights = pixel_coordinates_and_weights(
                 np.empty((0, 2), dtype=np.int32)
                 if strategy_pixel_set is None
-                else np.asarray(strategy_pixel_set, dtype=np.int32)
+                else strategy_pixel_set
             )
             fallback_ids = np.empty((0,), dtype=np.int32)
-            if coords.ndim == 2 and coords.shape[1] == 2 and coords.shape[0] > 0:
+            if coords.shape[0] > 0:
                 coords = coords[
                     (coords[:, 0] >= 0)
                     & (coords[:, 0] < epic.shape[1])
@@ -237,6 +260,11 @@ def build_microscope_cell_image_data(
             )
             if selected_ids.size > 0:
                 strategy_region = valid & np.isin(flat_ids, selected_ids)
+                if str(strategy).strip().lower() == "watershed" and strategy_labels is not None:
+                    fine_labels = np.asarray(strategy_labels)
+                    fine_x = np.clip(np.floor(norm_x * fine_labels.shape[1]).astype(np.int32), 0, fine_labels.shape[1] - 1)
+                    fine_y = np.clip(np.floor(norm_y * fine_labels.shape[0]).astype(np.int32), 0, fine_labels.shape[0] - 1)
+                    strategy_region = valid & (fine_labels[fine_y, fine_x] == int(label))
                 strategy_contour = segment_contour_from_region(strategy_region)
 
     return MicroscopeCellImageData(

@@ -439,7 +439,6 @@ def project_mask_pixel_participation(mask: np.ndarray, translation: np.ndarray, 
     }
 
 
-
 def run_auto_translation(
     method: str,
     epic_points: np.ndarray,

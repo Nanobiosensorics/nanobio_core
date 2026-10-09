@@ -433,7 +433,6 @@ def subpixel_watershed(signal, microscope_mask, translation, scale, threshold=16
     }
 
 
-
 def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np.inf, mask=None):
     if well.ndim == 3:
         well_img = np.max(well, axis=0)
