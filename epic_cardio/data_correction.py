@@ -186,6 +186,33 @@ def correct_well(well, threshold=75, coords=[], mode='mean', pixel_filtering=Tru
     
     return corr_data, {} if len(coords) == 0 else list(zip(coords[0], coords[1])), mask
 
+
+def correct_phase_offsets(well, phases):
+    """Make aligned pixel traces continuous using one constant map per later phase.
+
+    Input is the final background-corrected pm cube. Apply after spatial alignment
+    and within-phase artifact repair, before localization/evaluation. This assumes
+    all unobserved gap changes are additive offsets; it does not establish a cause.
+    """
+    corrected = np.array(well, dtype=float, copy=True)
+    if corrected.ndim != 3:
+        raise ValueError('Expected a time × height × width signal cube')
+    boundaries = sorted({int(p) for p in phases if 0 < int(p) < len(corrected)})
+    summaries = []
+    for start, end in zip(boundaries, [*boundaries[1:], len(corrected)]):
+        valid = np.isfinite(corrected[start - 1]) & np.isfinite(corrected[start])
+        offset = np.zeros(corrected.shape[1:], dtype=float)
+        np.subtract(corrected[start - 1], corrected[start], out=offset, where=valid)
+        corrected[start:end] += offset[None]
+        summaries.append(dict(
+            frame=start,
+            valid_pixels=int(valid.sum()),
+            mean_offset_pm=float(offset[valid].mean()) if valid.any() else 0.0,
+            max_absolute_offset_pm=float(np.abs(offset[valid]).max()) if valid.any() else 0.0,
+        ))
+    return corrected, summaries
+
+
 def _phase_translation(source_points, target_points, radius=3):
     """Return a confidence-gated integer shift from source to target points."""
     source = np.asarray(source_points, dtype=np.int32).reshape(-1, 2)

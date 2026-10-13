@@ -3,7 +3,9 @@ from dataclasses import dataclass
 import numpy as np
 import os
 from typing import Any, Callable, Dict, Optional
-from .data_correction import correct_well, correct_interphase_well_shifts, interpolate_frame_jumps
+from .data_correction import (
+    correct_well, correct_interphase_well_shifts, interpolate_frame_jumps, correct_phase_offsets,
+)
 from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
@@ -104,6 +106,7 @@ def preprocessing(
                 'background_selector': True,
                 'frame_jump_correction': True,
                 'frame_jump_threshold': 75.0,
+                'phase_offset_correction': True,
             }
         }
     
@@ -159,6 +162,8 @@ def preprocessing(
             well_corr, jump_summary = interpolate_frame_jumps(
                 well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
             )
+        if drift_params.get('phase_offset_correction', True):
+            well_corr, _ = correct_phase_offsets(well_corr, phases)
         well_data[name] = well_corr
         filter_ptss[name] = coords
         if progress_callback is not None:
@@ -204,6 +209,8 @@ def localization(
                 well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
             )
         
+        if drift_params.get('phase_offset_correction', True):
+            well_corr, _ = correct_phase_offsets(well_corr, phases)
         ptss = calculate_cell_maximas(well_corr, 
                     min_threshold=localization_params['threshold_range'][0], 
                     max_threshold=localization_params['threshold_range'][1], 
