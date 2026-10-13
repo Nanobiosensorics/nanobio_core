@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -23,6 +23,7 @@ class PreprocessResult:
     phases: List[int]
     filter_ptss: Dict[str, List[List[int]]]
     selected_range: List[Optional[int]]
+    active_area_filters: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

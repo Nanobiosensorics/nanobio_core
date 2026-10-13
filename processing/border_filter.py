@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import numpy as np
+
 from ..epic_cardio.defs import WELL_NAMES
 
 
@@ -87,3 +89,45 @@ def reset_border_filter_per_well(localization_params: dict) -> Dict[str, Dict[st
     per_well = default_border_filter_per_well()
     localization_params["filter_border_per_well"] = per_well
     return per_well
+
+
+def allowed_pixel_mask_for_well(localization_params: dict, well_name: str, shape=(80, 80)) -> np.ndarray:
+    """Combine rectangular trims with an optional saved active-sensor mask.
+
+    Active masks use one binary string per sensor row; ``1`` denotes a usable
+    pixel after the measurement-specific inward margin has been applied.
+    """
+    height, width = shape
+    border = border_filter_for_well(localization_params, well_name)
+    yy, xx = np.indices(shape)
+    allowed = (
+        (yy >= border['top']) & (yy < height - border['bottom'])
+        & (xx >= border['left']) & (xx < width - border['right'])
+    )
+    record = localization_params.get('filter_active_area_per_well', {}).get(well_name)
+    if record is not None:
+        rows = record.get('rows', [])
+        if len(rows) != height or any(
+            not isinstance(row, str) or len(row) != width or set(row) - {'0', '1'} for row in rows
+        ):
+            raise ValueError(f'{well_name}: active-area filter must contain {height} binary rows of width {width}')
+        allowed &= np.array([[value == '1' for value in row] for row in rows], dtype=bool)
+    return allowed
+
+
+def points_inside_allowed_area(points: np.ndarray, allowed: np.ndarray) -> np.ndarray:
+    """Test x/y sensor coordinates without clipping out-of-frame points inward."""
+    points = np.asarray(points)
+    keep = np.zeros(len(points), dtype=bool)
+    if not len(points):
+        return keep
+    height, width = allowed.shape
+    valid = (
+        np.isfinite(points[:, :2]).all(axis=1)
+        & (points[:, 0] >= 0) & (points[:, 0] <= width - 1)
+        & (points[:, 1] >= 0) & (points[:, 1] <= height - 1)
+    )
+    indices = np.flatnonzero(valid)
+    xy = np.rint(points[indices, :2]).astype(int)
+    keep[indices] = allowed[xy[:, 1], xy[:, 0]]
+    return keep

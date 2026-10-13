@@ -7,6 +7,7 @@ from .data_correction import (
     correct_well, correct_interphase_well_shifts, interpolate_frame_jumps, correct_phase_offsets,
 )
 from .filter import border_filter_for_well
+from ..processing.border_filter import allowed_pixel_mask_for_well, points_inside_allowed_area
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
 from .defs import *
@@ -231,6 +232,10 @@ def localization(
                 (ptss[:, 1] < y_max - bottom)
             )
             ptss = ptss[is_inside]
+
+        if len(ptss) > 0 and name in localization_params.get('filter_active_area_per_well', {}):
+            allowed = allowed_pixel_mask_for_well(localization_params, name, well_corr.shape[1:])
+            ptss = np.asarray(ptss)[points_inside_allowed_area(ptss, allowed)]
 
         well_data[name] = (well_corr, ptss, filter_ptss)
         if progress_callback is not None:
