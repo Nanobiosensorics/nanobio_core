@@ -89,3 +89,9 @@
 - Added a read-only v1–v5 microscope project adapter with independent image/mask roots, active/channel/composite selection and fingerprint validation. Synchronized package-relative processing imports across embedded checkouts.
 
 - Removed unused fixed-resolution microscope pyramid caching and its public exports. Current consumers render native source regions at viewport resolution.
+
+## 2026-10-14 — active sensor area
+
+`processing.border_filter.allowed_pixel_mask_for_well` combines rectangular trims with optional saved binary-row masks in `filter_active_area_per_well`. `points_inside_allowed_area` rejects nonfinite/out-of-frame coordinates without clipping them inward. EPIC localization applies the mask to candidate centers; microscope consumers additionally check full footprints and restrict region growth. Legacy projects are unaffected until an active-area mask is supplied.
+
+- `processing.active_area` provides scriptable raw-map boundary detection. `pipeline.preprocess_data` returns detected masks in the new optional `PreprocessResult.active_area_filters` field; `run_pipeline` applies them before localization. `apply_detected_border_filters` preserves stricter manual trims. Detection always uses full-acquisition frame zero with a two-pixel margin, independent of selected phases and correction results. Direct legacy `epic_cardio.processing.preprocessing` calls keep their existing return signature.

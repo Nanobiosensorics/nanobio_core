@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from ..epic_cardio import processing
+from ..processing.active_area import detect_active_areas, apply_detected_border_filters
 from ..models.result import (
     LoadDataResult,
     LocalizationResult,
@@ -28,6 +29,7 @@ def preprocess_data(
     raw_wells, full_time, full_phases, preprocessing_params, filter_ptss,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> PreprocessResult:
+    active_area_filters = detect_active_areas(raw_wells)
     well_data, time, phases, filter_points, selected_range = processing.preprocessing(
         preprocessing_params,
         raw_wells,
@@ -42,6 +44,7 @@ def preprocess_data(
         phases=phases,
         filter_ptss=filter_points,
         selected_range=selected_range,
+        active_area_filters=active_area_filters,
     )
 
 
@@ -79,6 +82,7 @@ def run_pipeline(data: Dict[str, Any], config: Dict[str, Any]) -> PipelineRunRes
         config["preprocessing_params"],
         data.get("filter_ptss", {}),
     )
+    apply_detected_border_filters(config['localization_params'], preprocessed.active_area_filters)
     localized = localize_data(
         data["raw_wells"],
         preprocessed.phases,
