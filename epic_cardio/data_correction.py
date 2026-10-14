@@ -254,7 +254,7 @@ def _shift_phase_frames(frames, translation):
 
 
 def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode,
-                                   pixel_filtering=True):
+                                   pixel_filtering=True, return_translations=False):
     """Register each phase independently to the strongest phase projection."""
     shifted_well = raw_well.copy()
     # The activity mask is used only to keep broken pixels out of registration;
@@ -270,6 +270,7 @@ def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode,
     starts = [0, *boundaries]
     ends = [*boundaries, corrected.shape[0]]
     phase_points = []
+    translations = []
     for start, end in zip(starts, ends):
         projection = np.max(corrected[start:end], axis=0)
         if np.max(projection) < threshold:
@@ -281,14 +282,16 @@ def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode,
         phase_points.append(np.column_stack([xs, ys]).astype(np.int32))
 
     if not phase_points:
-        return shifted_well
+        return (shifted_well, translations) if return_translations else shifted_well
     reference_index = int(np.argmax([len(points) for points in phase_points]))
     reference_points = phase_points[reference_index]
     for phase_index, (start, end) in enumerate(zip(starts, ends)):
         if phase_index == reference_index:
+            translations.append((start, end, 0, 0))
             continue
         translation = _phase_translation(phase_points[phase_index], reference_points)
+        translations.append((start, end, int(translation[0]), int(translation[1])))
         shifted_well[start:end] = _shift_phase_frames(
             shifted_well[start:end], translation,
         )
-    return shifted_well
+    return (shifted_well, translations) if return_translations else shifted_well

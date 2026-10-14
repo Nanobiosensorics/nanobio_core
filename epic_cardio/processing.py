@@ -7,6 +7,7 @@ from .data_correction import (
     correct_well, correct_interphase_well_shifts, interpolate_frame_jumps, correct_phase_offsets,
 )
 from .filter import border_filter_for_well
+from .recovery_source import prepare_recovery_source
 from ..processing.border_filter import allowed_pixel_mask_for_well, points_inside_allowed_area
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
@@ -146,6 +147,16 @@ def preprocessing(
         
         drift_params = preprocessing_params['drift_correction']
         well_tmp = well_tmp[slicer]
+        recovery_source = preprocessing_params.get('pixel_recovery_source')
+        if recovery_source:
+            well_corr, coords, _ = prepare_recovery_source(
+                recovery_source, name, well_tmp, drift_params, background_coords.get(name, []), phases,
+                current_time=time)
+            well_data[name] = well_corr
+            filter_ptss[name] = coords
+            if progress_callback is not None:
+                progress_callback(done, len(WELL_NAMES), f'Preprocessed recovered well {name}')
+            continue
         well_tmp = correct_interphase_well_shifts(
             well_tmp, phases,
             coords=(
@@ -196,21 +207,25 @@ def localization(
         well_tmp = wells[name][slicer]
         
         drift_params = preprocessing_params['drift_correction']
-        well_tmp = correct_interphase_well_shifts(well_tmp, phases,
-                                        coords=[] if not drift_params['background_selector'] else background_coords[name],
-                                        threshold=drift_params['threshold'],
-                                        mode=drift_params['filter_method'])
-        
-        well_corr, filter_ptss, mask = correct_well(well_tmp, 
-                                            coords=[] if not drift_params['background_selector'] else background_coords[name],
-                                            threshold=drift_params['threshold'],
-                                            mode=drift_params['filter_method'])
-        if drift_params.get('frame_jump_correction', True):
+        recovery_source = preprocessing_params.get('pixel_recovery_source')
+        if recovery_source:
+            well_corr, filter_ptss, mask = prepare_recovery_source(
+                recovery_source, name, well_tmp, drift_params, background_coords.get(name, []), phases,
+                allowed_pixel_mask_for_well(localization_params, name, well_tmp.shape[1:]))
+        else:
+            coords = [] if not drift_params['background_selector'] else background_coords[name]
+            well_tmp = correct_interphase_well_shifts(
+                well_tmp, phases, coords=coords, threshold=drift_params['threshold'],
+                mode=drift_params['filter_method'])
+            well_corr, filter_ptss, mask = correct_well(
+                well_tmp, coords=coords, threshold=drift_params['threshold'],
+                mode=drift_params['filter_method'])
+        if not recovery_source and drift_params.get('frame_jump_correction', True):
             well_corr, _ = interpolate_frame_jumps(
                 well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
             )
         
-        if drift_params.get('phase_offset_correction', True):
+        if not recovery_source and drift_params.get('phase_offset_correction', True):
             well_corr, _ = correct_phase_offsets(well_corr, phases)
         ptss = calculate_cell_maximas(well_corr, 
                     min_threshold=localization_params['threshold_range'][0], 
