@@ -42,6 +42,11 @@ it can remove biological responses. `phase_offset.mode='none'` permits sensitivi
 analysis; `single` uses the two boundary samples. Damaged frame-zero active-area
 detection fails explicitly instead of silently expanding the usable area.
 
+Background aggregation accepts finite observed or reconstructed samples,
+including CURATED picks; only MISSING/EXCLUDED and nonfinite values are omitted.
+Recovery eligibility, clean anchors and spatial donors are restricted to the
+current phase. A wholly missing phase is not filled using prior-phase support.
+
 `legacy` executes the original registration → correct_well → jump interpolation
 → single-frame offset functions, including dilation and clipping. Its automatic
 background uses an isolated configurable random seed (default 0), with global
@@ -75,6 +80,10 @@ process pool; one and multiple workers yield identical arrays and provenance.
 The existing measurement decoder supplies wavelengths/time; DMR files additionally
 supply instrument codes. Saved top-level or preprocessing `phases` take precedence
 over gaps >60 s, with source recorded. Saved background picks and trims are used.
+Loading honors `preprocessing.flip` (app default `[True, False]`) and
+`preprocessing.signal_range`: phase ranges resolve against full-acquisition
+boundaries, frame ranges slice directly, and values/codes/timestamps are sliced
+together. Remaining phase indices are rebased to the selected frame range.
 
 ```bash
 python -m nanobio_core.preprocessing.cli run MEASUREMENT --profile default --out OUTPUT

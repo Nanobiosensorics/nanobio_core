@@ -1,5 +1,10 @@
 # Changes
 
+- Fixed verified unified-preprocessing regressions: finite repaired background
+  picks remain usable, recovery qualification is strictly phase-local, and raw
+  measurement loading honors saved preprocessing flip and signal range. The
+  legacy numerical correction path is unchanged.
+
 - Added opt-in unified Cardio preprocessing with immutable profiles, signed
   NaN-aware stages, separated recovery detectors, reviewed curation, content
   caches, weighted support-aware exports and run/review/diff CLI. Both legacy

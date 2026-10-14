@@ -33,8 +33,10 @@ def test_split_recovery_matches_original_values_and_codes(artifact):
     if artifact in ('step', 'mixed'):
         values[25:, 5:7, 5:7] += 0.3
     if artifact in ('terminal', 'mixed'):
-        valid[40:, 2, 2] = False
-        values[40:, 2, 2] = 0
+        # Keep anchors in the later phase for historical equivalence. Entirely
+        # missing phases intentionally no longer qualify using previous phases.
+        valid[60:, 2, 2] = False
+        values[60:, 2, 2] = 0
     if artifact == 'biological':
         values[25:, 4, 4] += 0.3
     old = original_recovery(values, valid, time, [50], allowed)
@@ -58,7 +60,7 @@ def test_each_detector_and_fixers_on_known_artifacts(monkeypatch):
     assert detect_short_gaps(values[:, 3, 3], known, np.zeros(70, bool), config) == [(12, 15)]
     known[40:] = False
     assert detect_terminal_dropouts(known, config) == 40
-    assert detect_terminal_dropouts(np.zeros(70, bool), config, 3) == 0
+    assert detect_terminal_dropouts(np.zeros(70, bool), config) is None
     assert detect_terminal_dropouts(np.ones(70, bool), config) is None
     values[25:, 5:7, 5:7] += 0.3
     calls = []

@@ -171,12 +171,23 @@ def load_raw_measurement(path):
         if candidate.exists():
             parameters = json.loads(candidate.read_text())
             break
-    saved = parameters.get('phases', parameters.get('preprocessing', {}).get('phases'))
-    phases = tuple(saved) if saved is not None else tuple((np.flatnonzero(np.diff(time) > 60) + 1).tolist())
+    preprocessing = parameters.get('preprocessing', {})
+    saved = parameters.get('phases', preprocessing.get('phases'))
+    full_phases = (tuple(saved) if saved is not None
+                   else tuple((np.flatnonzero(np.diff(time) > 60) + 1).tolist()))
     source = 'project' if saved is not None else 'time_gaps_over_60_s'
-    flip = parameters.get('flip', [False, False])
-    value_wells = measurement_load.wl_map_to_wells(values, flip)
-    code_wells = measurement_load.wl_map_to_wells(codes, flip)
+    signal_range = preprocessing.get('signal_range', {})
+    left, right = signal_range.get('ranges', [0, None])
+    if signal_range.get('range_type', 0) == 0:
+        left = 0 if left == 0 or left > len(full_phases) else full_phases[left - 1]
+        right = len(time) if right is None else full_phases[right - 1]
+    selected = slice(left, right)
+    start, stop, _ = selected.indices(len(time))
+    phases = tuple(int(p - start) for p in full_phases if start < p < stop)
+    flip = preprocessing.get('flip', [True, False])
+    value_wells = measurement_load.wl_map_to_wells(values[selected], flip)
+    code_wells = measurement_load.wl_map_to_wells(codes[selected], flip)
+    time = np.asarray(time)[selected]
     localization = parameters.get('localization', {})
     raw = {name: RawWell(cube, code_wells[name], np.asarray(time), phases,
                          allowed_pixel_mask_for_well(localization, name, cube.shape[1:]), name, source)

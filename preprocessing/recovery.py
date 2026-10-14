@@ -169,13 +169,12 @@ def detect_short_gaps(trace, known, suspect, config):
     return intervals
 
 
-def detect_terminal_dropouts(known, config, prior_observations=0):
+def detect_terminal_dropouts(known, config):
+    """Qualify a tail only from observations in the supplied acquisition phase."""
     observed = np.flatnonzero(known)
     if (len(observed) >= config.minimum_observations
             and len(known) - observed[-1] - 1 >= config.tail_frames):
         return int(observed[-1] + 1)
-    if not len(observed) and prior_observations >= config.minimum_observations:
-        return 0
     return None
 
 
@@ -286,11 +285,11 @@ def recover_pixels(values, original_valid, time, phases, allowed, config=None):
     donors = np.zeros(raw.shape, dtype=np.uint16)
     steps = []
     bounds = [0, *sorted({int(p) for p in phases if 0 < p < len(raw)}), len(raw)]
-    responsive = allowed & (valid.sum(axis=0) >= config.minimum_observations)
     for left, right in zip(bounds[:-1], bounds[1:]):
         if right - left < config.minimum_observations:
             continue
         segment = raw[left:right]
+        responsive = allowed & (valid[left:right].sum(axis=0) >= config.minimum_observations)
         measured = np.where(valid[left:right], segment, np.nan)
         baseline = _valid_centered_median(measured, config.median_radius, config.minimum_observations)
         residual = (segment - baseline) * 1000
@@ -330,7 +329,7 @@ def recover_pixels(values, original_valid, time, phases, allowed, config=None):
             for step in detected:
                 if step['applied']:
                     stitch_step(result, methods, step, right)
-            tail = detect_terminal_dropouts(known, config, valid[:left, y, x].sum())
+            tail = detect_terminal_dropouts(known, config)
             if tail is not None:
                 targets[left + tail:right, y, x] = True
     cache = {}

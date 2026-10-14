@@ -131,6 +131,7 @@ def background(state, config):
     settings = config.background
     coordinates = []
     eligible = state.allowed.copy()
+    available = np.isfinite(state.values) & ~np.isin(state.method, [MISSING, EXCLUDED])
     if state.raw.cell_mask is not None:
         eligible &= ~state.raw.cell_mask.astype(bool)
     if settings.coordinates:
@@ -139,7 +140,7 @@ def background(state, config):
             if 0 <= y < eligible.shape[0] and 0 <= x < eligible.shape[1] and eligible[y, x]:
                 coordinates.append((x, y))
     elif settings.method != 'none':
-        score = _nanmedian(np.where(state.method == OBSERVED, np.abs(state.values), np.nan))
+        score = _nanmedian(np.where(available, np.abs(state.values), np.nan))
         candidates = np.flatnonzero(eligible & np.isfinite(score) & (score < settings.threshold_pm))
         for index in candidates[np.argsort(score.ravel()[candidates], kind='stable')]:
             y, x = np.unravel_index(index, eligible.shape)
@@ -150,7 +151,7 @@ def background(state, config):
     trace = np.zeros(len(state.values))
     if coordinates and settings.method != 'none':
         xs, ys = np.asarray(coordinates).T
-        samples = np.where(state.method[:, ys, xs] == OBSERVED, state.values[:, ys, xs], np.nan)
+        samples = np.where(available[:, ys, xs], state.values[:, ys, xs], np.nan)
         if settings.method == 'median':
             trace = _nanmedian(samples, axis=1)
         else:
