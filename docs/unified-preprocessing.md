@@ -35,17 +35,40 @@ reviewed-repair constants. Use `to_dict()`, `from_dict(data)` and `config_hash()
 for JSON project parameters; use `dataclasses.replace` for overrides.
 
 `default` uses five observed reference anchors, deterministic spaced low-signal
-background picks, and five observed anchors on either side of each phase gap
-for linear extrapolation to the gap midpoint. Insufficient support is recorded
-and left uncorrected. Gap correction assumes unobserved differences are offsets;
+background picks, and `phase_offset.mode='level'`: the median of the last five
+finite observed or repaired samples before each gap minus the median of the first
+five after it. `anchor_frames` controls that count; there is no slope extrapolation.
+Insufficient support is recorded and left uncorrected.
+Gap correction assumes unobserved differences are offsets;
 it can remove biological responses. `phase_offset.mode='none'` permits sensitivity
-analysis; `single` uses the two boundary samples. Damaged frame-zero active-area
-detection fails explicitly instead of silently expanding the usable area.
+analysis; `single` uses the two boundary samples. `extrapolate` fits lines to the
+same anchors, evaluating toward the gap midpoint at most `max_extrapolation_s`
+(default 300 seconds) beyond the nearest valid sample on each side. Saved `robust`
+configs are accepted as a deprecated alias and serialize/hash as `extrapolate`.
+`observed_only` also uses `level`; the separate `legacy` numerical path is unchanged.
+Damaged frame-zero active-area detection fails explicitly instead of silently
+expanding the usable area.
 
 Background aggregation accepts finite observed or reconstructed samples,
 including CURATED picks; only MISSING/EXCLUDED and nonfinite values are omitted.
 Recovery eligibility, clean anchors and spatial donors are restricted to the
 current phase. A wholly missing phase is not filled using prior-phase support.
+
+The phase-offset receipt includes `background_checks` for every boundary, using
+the same picks and aggregation as background subtraction. `background_step_pm`
+is the after-minus-before difference of the first/last `anchor_frames` finite background medians;
+`passed` compares its magnitude with three times the within-phase background noise.
+Noise is 1.4826 × MAD of first differences / √2 in the two adjacent phases of the
+original background trace; a 1e-9 pm floor handles arithmetic roundoff. Missing
+picks/support give null step/pass values. Checks audit actual levels, including
+when offsets are disabled; they do not certify extrapolated midpoint agreement.
+
+Read-only March/July verification found that uncapped extrapolation, applied after
+background subtraction, moved March pick (43,35) by −24.65 pm and introduced a
+−20.20 pm aggregate background step. Level matching preserves the stage order:
+the pick's boundary step is now 0 pm and its later-phase median is +3.20 pm
+(production 0 pm). The measured aggregate step is +0.20 pm, within background
+noise. Background subtraction itself was not applied after the offset stage.
 
 `legacy` executes the original registration → correct_well → jump interpolation
 → single-frame offset functions, including dilation and clipping. Its automatic
@@ -115,6 +138,7 @@ Historical recovery sources, external July scripts, existing projects and GUI
 profile controls are not migrated automatically. Reprocessing datasets,
 re-exporting and retraining are separate work. Core tests include detector
 benchmarks, phase/border/donor invariants, fixture legacy comparison, real-fixture
-temporal/spatial holdouts, robust offsets, cache invalidation and worker equality;
-holdout errors are printed with `pytest -s` and are not publication validation of
+temporal/spatial holdouts, level/capped offsets, background continuity, cache
+invalidation and worker equality; holdout errors are printed with `pytest -s`
+and are not publication validation of
 every measurement or detector.

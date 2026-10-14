@@ -1,5 +1,12 @@
 # Changes
 
+- Unified preprocessing now defaults to median phase-anchor levels, accepting
+  finite repaired anchors as well as observations. Optional `extrapolate` limits
+  each side to 300 seconds by default; the deprecated saved `robust` mode
+  canonicalizes to `extrapolate`. Boundary receipts audit the same background picks against
+  within-phase noise, exposing actual steps. This removes long-gap slope
+  amplification and March's artificial background offset; legacy stays unchanged.
+
 - Fixed verified unified-preprocessing regressions: finite repaired background
   picks remain usable, recovery qualification is strictly phase-local, and raw
   measurement loading honors saved preprocessing flip and signal range. The

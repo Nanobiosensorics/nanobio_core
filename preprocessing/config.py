@@ -3,6 +3,7 @@
 from dataclasses import asdict, dataclass, field, fields, replace
 import hashlib
 import json
+import math
 
 from ..epic_cardio.pixel_recovery import RecoveryConfig as OriginalRecoveryConfig
 
@@ -71,8 +72,14 @@ class BackgroundConfig:
 
 @dataclass(frozen=True)
 class PhaseOffsetConfig:
-    mode: str = 'robust'
+    mode: str = 'level'
     anchor_frames: int = 5
+    max_extrapolation_s: float = 300.0
+
+    def __post_init__(self):
+        # Canonicalize the deprecated saved-config alias before serialization/hashing.
+        if self.mode == 'robust':
+            object.__setattr__(self, 'mode', 'extrapolate')
 
 
 @dataclass(frozen=True)
@@ -109,12 +116,17 @@ class PreprocessConfig:
             raise ValueError('Unsupported preprocessing config version')
         if self.profile_name not in ('default', 'legacy', 'observed_only'):
             raise ValueError('Unknown preprocessing profile')
-        if self.phase_offset.mode not in ('none', 'single', 'robust'):
+        if self.phase_offset.mode not in ('none', 'single', 'level', 'extrapolate'):
             raise ValueError('Unknown phase offset mode')
         if self.background.method not in ('none', 'mean', 'median'):
             raise ValueError('Unknown background method')
-        if self.reference.frames < 1 or self.phase_offset.anchor_frames < 2:
-            raise ValueError('Reference and fit anchor counts must be positive (fit requires two)')
+        if self.reference.frames < 1 or self.phase_offset.anchor_frames < 1:
+            raise ValueError('Reference and phase anchor counts must be positive')
+        if self.phase_offset.mode == 'extrapolate' and self.phase_offset.anchor_frames < 2:
+            raise ValueError('Extrapolation requires at least two anchors')
+        limit = self.phase_offset.max_extrapolation_s
+        if not math.isfinite(limit) or limit < 0:
+            raise ValueError('Maximum extrapolation seconds must be finite and nonnegative')
         if not 0 <= self.export.min_observed_weight <= 1:
             raise ValueError('Export weight must be between zero and one')
         if self.active_area.margin_px not in (1, 2):

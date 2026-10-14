@@ -179,8 +179,10 @@ def phase_offset(state, config):
                 if settings.mode == 'single':
                     ids_before, ids_after = [start - 1], [start]
                 else:
-                    ids_before = np.flatnonzero(result.method[left:start, y, x] == OBSERVED) + left
-                    ids_after = np.flatnonzero(result.method[start:end, y, x] == OBSERVED) + start
+                    valid = np.isfinite(result.values[:, y, x]) & ~np.isin(
+                        result.method[:, y, x], [MISSING, EXCLUDED])
+                    ids_before = np.flatnonzero(valid[left:start]) + left
+                    ids_after = np.flatnonzero(valid[start:end]) + start
                     if min(len(ids_before), len(ids_after)) < settings.anchor_frames:
                         continue
                     ids_before = ids_before[-settings.anchor_frames:]
@@ -190,16 +192,62 @@ def phase_offset(state, config):
                     continue
                 if settings.mode == 'single':
                     delta = before[0] - after[0]
+                elif settings.mode == 'level':
+                    delta = np.median(before) - np.median(after)
                 else:
-                    pre = np.polyfit(state.raw.time_s[ids_before] - midpoint, before, 1)
-                    post = np.polyfit(state.raw.time_s[ids_after] - midpoint, after, 1)
+                    pre_time, post_time = state.raw.time_s[ids_before], state.raw.time_s[ids_after]
+                    pre_target = min(midpoint, pre_time[-1] + settings.max_extrapolation_s)
+                    post_target = max(midpoint, post_time[0] - settings.max_extrapolation_s)
+                    pre = np.polyfit(pre_time - pre_target, before, 1)
+                    post = np.polyfit(post_time - post_target, after, 1)
                     delta = pre[1] - post[1]
                 offset[y, x] = delta
                 result.values[start:end, y, x] += delta
             maps.append(dict(frame=start, offset_pm=offset.tolist(),
                              unsupported_pixels=int((state.allowed & ~np.isfinite(offset)).sum())))
-    result.receipts['phase_offset'] = dict(parameters=asdict(settings), maps=maps)
+    checks = _background_continuity(result, config, bounds)
+    result.receipts['phase_offset'] = dict(parameters=asdict(settings), maps=maps,
+                                         background_checks=checks)
     return result
+
+
+def _background_continuity(state, config, bounds):
+    """Audit the same picks after offsets against measured within-phase drift noise."""
+    receipt = state.receipts.get('background', {})
+    coordinates = receipt.get('coordinates', [])
+    trace = np.full(len(state.values), np.nan)
+    original = None
+    if coordinates and config.background.method != 'none':
+        xs, ys = np.asarray(coordinates).T
+        available = np.isfinite(state.values[:, ys, xs]) & ~np.isin(
+            state.method[:, ys, xs], [MISSING, EXCLUDED])
+        samples = np.where(available, state.values[:, ys, xs], np.nan)
+        if config.background.method == 'median':
+            trace = _nanmedian(samples, axis=1)
+        else:
+            count = available.sum(axis=1)
+            trace = np.divide(np.nansum(samples, axis=1), count,
+                              out=np.full(len(samples), np.nan), where=count > 0)
+        original = np.asarray(receipt['trace_pm'])
+    checks = []
+    k = config.phase_offset.anchor_frames
+    for i in range(1, len(bounds) - 1):
+        left, start, end = bounds[i - 1:i + 2]
+        noise = np.nan
+        if original is not None:
+            differences = np.concatenate([np.diff(original[left:start]), np.diff(original[start:end])])
+            differences = differences[np.isfinite(differences)]
+            if len(differences):
+                noise = float(1.4826 * np.median(np.abs(differences - np.median(differences))) / np.sqrt(2))
+        before = trace[left:start][np.isfinite(trace[left:start])][-k:]
+        after = trace[start:end][np.isfinite(trace[start:end])][:k]
+        supported = min(len(before), len(after)) >= k and np.isfinite(noise)
+        step = float(np.median(after) - np.median(before)) if supported else None
+        tolerance = max(3 * noise, 1e-9) if np.isfinite(noise) else None
+        checks.append(dict(frame=start, background_step_pm=step,
+                           noise_pm=noise if np.isfinite(noise) else None, tolerance_pm=tolerance,
+                           passed=bool(abs(step) <= tolerance) if supported else None))
+    return checks
 
 
 def finalize(state, config, provenance=None):

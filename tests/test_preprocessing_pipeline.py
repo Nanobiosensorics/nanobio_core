@@ -129,7 +129,7 @@ def test_real_fixture_holdout_reports_temporal_and_spatial_error():
     assert np.median(spatial_error) < 500
 
 
-def test_robust_phase_offset_known_offset_and_noise():
+def test_extrapolate_phase_offset_known_offset_and_noise():
     raw = raw_well()
     time = raw.time_s.copy() * 9
     time[30:] += 100
@@ -140,6 +140,7 @@ def test_robust_phase_offset_known_offset_and_noise():
     values += rng.normal(0, 0.0005, values.shape)
     raw = replace(raw, values_nm=values, time_s=time)
     config = config_without_background()
+    config = replace(config, phase_offset=replace(config.phase_offset, mode='extrapolate'))
     state = stages.validity(raw, config)
     state = stages.reference(state, config)
     corrected = stages.phase_offset(state, config)
