@@ -5,7 +5,9 @@ from scipy import ndimage
 
 
 def repair_confirmed_pulse(values, valid, time, phases, allowed, start, end,
-                           clean_frames=6, threshold_pm=75.0, minimum_neighbors=2):
+                           clean_frames=6, threshold_pm=75.0, minimum_neighbors=2,
+                           noise_multiplier=6.0, noise_scale=1.4826, minimum_clean_frames=3,
+                           neighbor_radius=1):
     """Interpolate [start, end) only where original observations confirm a return.
 
     Values are nm and time is seconds. The interval must be reviewed externally;
@@ -22,7 +24,7 @@ def repair_confirmed_pulse(values, valid, time, phases, allowed, start, end,
     if len(time) != len(raw) or not np.isfinite(time).all() or np.any(np.diff(time) <= 0):
         raise ValueError('Acquisition times must increase strictly')
     left, right = start - clean_frames, end + clean_frames
-    if clean_frames < 3 or not 0 <= left < start < end < right <= len(raw):
+    if clean_frames < minimum_clean_frames or not 0 <= left < start < end < right <= len(raw):
         raise ValueError('Complete clean windows are required')
     if any(left < int(p) < right for p in phases):
         raise ValueError('Pulse and clean anchors cannot cross a phase boundary')
@@ -33,8 +35,8 @@ def repair_confirmed_pulse(values, valid, time, phases, allowed, start, end,
     predicted = (offsets[:, None] * fit[0] + fit[1]).reshape(raw.shape)
     residual = (raw - predicted) * 1000
     anchor_residual = residual[anchors]
-    noise = 1.4826 * np.median(np.abs(anchor_residual - np.median(anchor_residual, axis=0)), axis=0)
-    tolerance = np.maximum(threshold_pm, 6 * noise)
+    noise = noise_scale * np.median(np.abs(anchor_residual - np.median(anchor_residual, axis=0)), axis=0)
+    tolerance = np.maximum(threshold_pm, noise_multiplier * noise)
     clean = allowed & valid[anchors].all(axis=0)
     clean &= np.max(np.abs(anchor_residual), axis=0) <= tolerance
     # Independent pre/post fits distinguish returning pulses from real steps.
@@ -45,7 +47,8 @@ def repair_confirmed_pulse(values, valid, time, phases, allowed, start, end,
     clean &= disagreement.reshape(allowed.shape) <= tolerance
     excursion = np.any(valid[start:end] & (np.abs(residual[start:end]) > tolerance), axis=0)
     candidates = clean & excursion
-    neighbor_count = ndimage.convolve(candidates.astype(int), np.ones((3, 3), dtype=int),
+    width = 2 * neighbor_radius + 1
+    neighbor_count = ndimage.convolve(candidates.astype(int), np.ones((width, width), dtype=int),
                                      mode='constant', cval=0)
     neighbor_count -= candidates.astype(int)
     accepted = candidates & (neighbor_count >= minimum_neighbors)

@@ -89,6 +89,37 @@ def save_params(path, well_data, preprocessing, localization):
         json.dump(parameters, f)
 
 
+def _profile_preprocess(params, name, values, phases, background_coords):
+    from dataclasses import replace
+    from ..preprocessing import PreprocessConfig, RawWell, preprocess_well
+
+    config = PreprocessConfig.profile(params['pipeline_profile'])
+    if params.get('pipeline_config'):
+        config = PreprocessConfig.from_dict({**config.to_dict(), **params['pipeline_config']})
+    coords = tuple(map(tuple, background_coords.get(name, [])))
+    if coords:
+        config = replace(config, background=replace(config.background, coordinates=coords))
+    time = np.asarray(params.get('pipeline_time_s', []), dtype=float)
+    if len(time) != len(values):
+        raise ValueError('Profile localization requires preprocessing timestamps in pipeline_time_s')
+    # The legacy cube API carries wavelengths only. Supply codes via pipeline_codes when available.
+    codes = np.asarray(params.get('pipeline_codes', {}).get(name, np.ones(values.shape, dtype=np.uint8)))
+    masks = params.get('pipeline_allowed', {})
+    allowed = np.asarray(masks.get(name, np.ones(values.shape[1:], dtype=bool)), dtype=bool)
+    raw = RawWell(values, codes, time, tuple(phases), allowed, name)
+    result = preprocess_well(raw, config, params.get('pipeline_curation'))
+    coords = result.receipts.get('background', {}).get('coordinates', [])
+    return result, coords
+
+
+def _pipeline_legacy_cube(result):
+    from ..preprocessing import EXCLUDED
+
+    values = np.nan_to_num(result.values_pm, nan=0.0, posinf=0.0, neginf=0.0)
+    values[result.method == EXCLUDED] = 0.0
+    return values
+
+
 def preprocessing(
     preprocessing_params, wells, time, phases, background_coords={},
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -134,6 +165,9 @@ def preprocessing(
                 tmp.append(p - selected_range[0])
         phases = tmp
 
+    if preprocessing_params.get('pipeline_profile'):
+        preprocessing_params['pipeline_time_s'] = np.asarray(time).tolist()
+
     for done, name in enumerate(WELL_NAMES, start=1):
         if progress_callback is None:
             print("Parsing", name, end='\r')
@@ -147,6 +181,15 @@ def preprocessing(
         
         drift_params = preprocessing_params['drift_correction']
         well_tmp = well_tmp[slicer]
+        if preprocessing_params.get('pipeline_profile'):
+            result, coords = _profile_preprocess(
+                preprocessing_params, name, well_tmp, phases, background_coords)
+            # Compatibility boundary: old app consumers require finite cubes.
+            well_data[name] = _pipeline_legacy_cube(result)
+            filter_ptss[name] = coords
+            if progress_callback is not None:
+                progress_callback(done, len(WELL_NAMES), f'Preprocessed well {name}')
+            continue
         recovery_source = preprocessing_params.get('pixel_recovery_source')
         if recovery_source:
             well_corr, coords, _ = prepare_recovery_source(
@@ -208,7 +251,18 @@ def localization(
         
         drift_params = preprocessing_params['drift_correction']
         recovery_source = preprocessing_params.get('pixel_recovery_source')
-        if recovery_source:
+        pipeline_profile = preprocessing_params.get('pipeline_profile')
+        maxima_cube = None
+        if pipeline_profile:
+            from ..preprocessing import OBSERVED, TEMPORAL, STITCHED
+
+            result, filter_ptss = _profile_preprocess(
+                preprocessing_params, name, well_tmp, phases, background_coords)
+            well_corr = _pipeline_legacy_cube(result)
+            eligible = np.isin(result.method, [OBSERVED, TEMPORAL, STITCHED])
+            maxima_cube = np.where(eligible & np.isfinite(result.values_pm), result.values_pm, -np.inf)
+            mask = ~np.any(eligible, axis=0)
+        elif recovery_source:
             well_corr, filter_ptss, mask = prepare_recovery_source(
                 recovery_source, name, well_tmp, drift_params, background_coords.get(name, []), phases,
                 allowed_pixel_mask_for_well(localization_params, name, well_tmp.shape[1:]))
@@ -220,14 +274,15 @@ def localization(
             well_corr, filter_ptss, mask = correct_well(
                 well_tmp, coords=coords, threshold=drift_params['threshold'],
                 mode=drift_params['filter_method'])
-        if not recovery_source and drift_params.get('frame_jump_correction', True):
+        if not pipeline_profile and not recovery_source and drift_params.get('frame_jump_correction', True):
             well_corr, _ = interpolate_frame_jumps(
                 well_corr, threshold=drift_params.get('frame_jump_threshold', 75.0), phases=phases,
             )
         
-        if not recovery_source and drift_params.get('phase_offset_correction', True):
+        if not pipeline_profile and not recovery_source and drift_params.get('phase_offset_correction', True):
             well_corr, _ = correct_phase_offsets(well_corr, phases)
-        ptss = calculate_cell_maximas(well_corr, 
+        maxima_input = well_corr if maxima_cube is None else maxima_cube
+        ptss = calculate_cell_maximas(maxima_input,
                     min_threshold=localization_params['threshold_range'][0], 
                     max_threshold=localization_params['threshold_range'][1], 
                     neighborhood_size=localization_params['neighbourhood_size'],

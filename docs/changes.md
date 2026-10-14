@@ -1,5 +1,13 @@
 # Changes
 
+- Added opt-in unified Cardio preprocessing with immutable profiles, signed
+  NaN-aware stages, separated recovery detectors, reviewed curation, content
+  caches, weighted support-aware exports and run/review/diff CLI. Both legacy
+  cube entrypoints share profile processing and timestamps; zero rendering is
+  confined to their compatibility boundary. See unified-preprocessing.md.
+- Confirmed-pulse noise/anchor/neighbor constants are now optional parameters
+  with unchanged defaults. Fixed the phase-offset test package import.
+
 - Fractional watershed now expands full-region seeds through four-neighbour
   threshold-foreground paths using flat marker-controlled watershed. Labels
   cannot take shortcuts across background gaps in a connected region; the

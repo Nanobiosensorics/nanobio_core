@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from epic_cardio.data_correction import correct_phase_offsets
+from nanobio_core.epic_cardio.data_correction import correct_phase_offsets
 
 
 def test_offsets_preserve_first_phase_and_kinetics_across_three_phases():
