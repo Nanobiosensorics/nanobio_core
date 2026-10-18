@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field, fields, replace
 import hashlib
 import json
 import math
+import warnings
 
 from ..epic_cardio.pixel_recovery import RecoveryConfig as OriginalRecoveryConfig
 
@@ -47,6 +48,11 @@ class RecoveryConfig(OriginalRecoveryConfig):
 
 @dataclass(frozen=True)
 class CurationConfig:
+    method: str = 'low_rank'
+    min_correlation: float = 0.8
+    max_rank: int = 3
+    basis_variance: float = 0.95
+    min_explained: float = 0.8
     clean_frames: int = 6
     threshold_pm: float = 75.0
     minimum_neighbors: int = 2
@@ -54,6 +60,14 @@ class CurationConfig:
     noise_scale: float = 1.4826
     minimum_clean_frames: int = 3
     neighbor_radius: int = 1
+
+    def __post_init__(self):
+        if isinstance(self.max_rank, bool) or not isinstance(self.max_rank, int) or self.max_rank < 1:
+            raise ValueError('Curation max_rank must be a positive integer')
+        if not 0 < self.basis_variance <= 1:
+            raise ValueError('Curation basis_variance must be greater than zero and at most one')
+        if not 0 <= self.min_explained <= 1:
+            raise ValueError('Curation min_explained must be between zero and one')
 
 
 @dataclass(frozen=True)
@@ -82,9 +96,22 @@ class PhaseOffsetConfig:
             object.__setattr__(self, 'mode', 'extrapolate')
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ExportConfig:
-    min_observed_weight: float = 0.5
+    min_available_weight: float = 0.5
+
+    def __init__(self, min_available_weight=0.5, *, min_observed_weight=None):
+        if min_observed_weight is not None:
+            warnings.warn('min_observed_weight is deprecated; use min_available_weight',
+                          DeprecationWarning, stacklevel=2)
+            min_available_weight = min_observed_weight
+        object.__setattr__(self, 'min_available_weight', min_available_weight)
+
+    @property
+    def min_observed_weight(self):
+        warnings.warn('min_observed_weight is deprecated; use min_available_weight',
+                      DeprecationWarning, stacklevel=2)
+        return self.min_available_weight
 
 
 @dataclass(frozen=True)
@@ -94,6 +121,29 @@ class LegacyConfig:
     frame_jump_threshold: float = 75.0
     phase_offset_correction: bool = True
     random_seed: int = 0
+
+
+@dataclass(frozen=True)
+class V2Config:
+    event_fraction: float = 0.5
+    event_z: float = 6.0
+    max_pulse_frames: int = 15
+    regional_step_fraction: float = 0.1
+    consensus_fraction: float = 0.5
+    max_edge_extension: int = 2
+
+    def __post_init__(self):
+        if not 0 < self.consensus_fraction <= 1:
+            raise ValueError('Consensus fraction must be greater than zero and at most one')
+        if (isinstance(self.max_edge_extension, bool) or not isinstance(self.max_edge_extension, int)
+                or self.max_edge_extension < 0):
+            raise ValueError('Maximum edge extension must be a nonnegative integer')
+        if not 0 < self.event_fraction <= 1 or not 0 < self.regional_step_fraction < self.event_fraction:
+            raise ValueError('V2 fractions require 0 < regional step < event <= 1')
+        if (not math.isfinite(self.event_z) or self.event_z <= 0
+                or isinstance(self.max_pulse_frames, bool) or not isinstance(self.max_pulse_frames, int)
+                or self.max_pulse_frames < 1):
+            raise ValueError('V2 event z and pulse limit must be positive')
 
 
 @dataclass(frozen=True)
@@ -110,16 +160,21 @@ class PreprocessConfig:
     phase_offset: PhaseOffsetConfig = field(default_factory=PhaseOffsetConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     legacy: LegacyConfig = field(default_factory=LegacyConfig)
+    v2: V2Config = field(default_factory=V2Config)
 
     def __post_init__(self):
         if self.version != 1:
             raise ValueError('Unsupported preprocessing config version')
-        if self.profile_name not in ('default', 'legacy', 'observed_only'):
+        if self.profile_name not in ('default', 'default_v2', 'legacy', 'observed_only'):
             raise ValueError('Unknown preprocessing profile')
         if self.phase_offset.mode not in ('none', 'single', 'level', 'extrapolate'):
             raise ValueError('Unknown phase offset mode')
         if self.background.method not in ('none', 'mean', 'median'):
             raise ValueError('Unknown background method')
+        if self.curation.method not in ('low_rank', 'common_mode', 'per_pixel'):
+            raise ValueError('Unknown curation method')
+        if not 0 <= self.curation.min_correlation <= 1:
+            raise ValueError('Curation min_correlation must be between zero and one')
         if self.reference.frames < 1 or self.phase_offset.anchor_frames < 1:
             raise ValueError('Reference and phase anchor counts must be positive')
         if self.phase_offset.mode == 'extrapolate' and self.phase_offset.anchor_frames < 2:
@@ -127,7 +182,7 @@ class PreprocessConfig:
         limit = self.phase_offset.max_extrapolation_s
         if not math.isfinite(limit) or limit < 0:
             raise ValueError('Maximum extrapolation seconds must be finite and nonnegative')
-        if not 0 <= self.export.min_observed_weight <= 1:
+        if not 0 <= self.export.min_available_weight <= 1:
             raise ValueError('Export weight must be between zero and one')
         if self.active_area.margin_px not in (1, 2):
             raise ValueError('Active-area margin must be one or two pixels')
@@ -146,7 +201,7 @@ class PreprocessConfig:
     @classmethod
     def profile(cls, name):
         name = name.replace('-', '_')
-        if name not in ('default', 'legacy', 'observed_only'):
+        if name not in ('default', 'default_v2', 'legacy', 'observed_only'):
             raise ValueError(f'Unknown preprocessing profile: {name}')
         config = cls(profile_name=name)
         if name == 'observed_only':

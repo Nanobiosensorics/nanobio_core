@@ -52,9 +52,10 @@ def main(argv=None):
                   for name, result in results.items()}
     if output is not None:
         output.mkdir(parents=True, exist_ok=True)
-        (output / f'{args.command}-receipts.json').write_text(json.dumps(report, indent=2))
+        (output / f'{args.command}-receipts.json').write_text(
+            json.dumps(report, indent=2, default=lambda value: value.tolist()))
     else:
-        print(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2, default=lambda value: value.tolist()))
 
 
 if __name__ == '__main__':

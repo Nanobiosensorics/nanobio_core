@@ -109,6 +109,36 @@ def _interpolate_phase_jumps(segment, threshold, max_gap):
     return corrected, corrected_mask
 
 
+def moving_average_within_phases(well, window=5, phases=()):
+    """Centred temporal moving average that never averages across phase gaps.
+
+    ``window`` is rounded down to an odd frame count; values below 3 return a copy.
+    Phase edges use the available frames only, and nonfinite samples are ignored.
+    """
+    smoothed = np.array(well, dtype=float, copy=True)
+    window = int(window)
+    window -= 1 - window % 2
+    if smoothed.ndim != 3 or window < 3:
+        return smoothed
+
+    half = window // 2
+    boundaries = sorted({int(phase) for phase in phases or () if 0 < int(phase) < smoothed.shape[0]})
+    for start, end in zip([0, *boundaries], [*boundaries, smoothed.shape[0]]):
+        segment = smoothed[start:end]
+        finite = np.isfinite(segment)
+        zeros = np.zeros((1, *segment.shape[1:]))
+        sums = np.concatenate([zeros, np.cumsum(np.where(finite, segment, 0.0), axis=0)])
+        counts = np.concatenate([zeros, np.cumsum(finite, axis=0)])
+        frames = np.arange(len(segment))
+        lo = np.clip(frames - half, 0, len(segment))
+        hi = np.clip(frames + half + 1, 0, len(segment))
+        count = counts[hi] - counts[lo]
+        with np.errstate(invalid='ignore', divide='ignore'):
+            mean = (sums[hi] - sums[lo]) / count
+        smoothed[start:end] = np.where(finite & (count > 0), mean, segment)
+    return smoothed
+
+
 def interpolate_frame_jumps(well, threshold=75.0, phases=(), max_gap=5):
     """Interpolate trace-local artifacts without crossing phase boundaries.
 

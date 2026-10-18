@@ -5,6 +5,7 @@ import os
 from typing import Any, Callable, Dict, Optional
 from .data_correction import (
     correct_well, correct_interphase_well_shifts, interpolate_frame_jumps, correct_phase_offsets,
+    moving_average_within_phases,
 )
 from .filter import border_filter_for_well
 from .recovery_source import prepare_recovery_source
@@ -120,6 +121,13 @@ def _pipeline_legacy_cube(result):
     return values
 
 
+def _temporal_smoothing(values, drift_params, phases):
+    window = int(drift_params.get('temporal_moving_average_window', 0) or 0)
+    if window < 3:
+        return values
+    return moving_average_within_phases(values, window, phases)
+
+
 def preprocessing(
     preprocessing_params, wells, time, phases, background_coords={},
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -185,7 +193,7 @@ def preprocessing(
             result, coords = _profile_preprocess(
                 preprocessing_params, name, well_tmp, phases, background_coords)
             # Compatibility boundary: old app consumers require finite cubes.
-            well_data[name] = _pipeline_legacy_cube(result)
+            well_data[name] = _temporal_smoothing(_pipeline_legacy_cube(result), drift_params, phases)
             filter_ptss[name] = coords
             if progress_callback is not None:
                 progress_callback(done, len(WELL_NAMES), f'Preprocessed well {name}')
@@ -195,7 +203,7 @@ def preprocessing(
             well_corr, coords, _ = prepare_recovery_source(
                 recovery_source, name, well_tmp, drift_params, background_coords.get(name, []), phases,
                 current_time=time)
-            well_data[name] = well_corr
+            well_data[name] = _temporal_smoothing(well_corr, drift_params, phases)
             filter_ptss[name] = coords
             if progress_callback is not None:
                 progress_callback(done, len(WELL_NAMES), f'Preprocessed recovered well {name}')
@@ -219,7 +227,7 @@ def preprocessing(
             )
         if drift_params.get('phase_offset_correction', True):
             well_corr, _ = correct_phase_offsets(well_corr, phases)
-        well_data[name] = well_corr
+        well_data[name] = _temporal_smoothing(well_corr, drift_params, phases)
         filter_ptss[name] = coords
         if progress_callback is not None:
             correction_text = ""
@@ -281,6 +289,10 @@ def localization(
         
         if not pipeline_profile and not recovery_source and drift_params.get('phase_offset_correction', True):
             well_corr, _ = correct_phase_offsets(well_corr, phases)
+        well_corr = _temporal_smoothing(well_corr, drift_params, phases)
+        if maxima_cube is not None:
+            maxima_cube = np.where(np.isfinite(maxima_cube), _temporal_smoothing(maxima_cube, drift_params, phases),
+                                   maxima_cube)
         maxima_input = well_corr if maxima_cube is None else maxima_cube
         ptss = calculate_cell_maximas(maxima_input,
                     min_threshold=localization_params['threshold_range'][0], 

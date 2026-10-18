@@ -1,5 +1,50 @@
 # Changes
 
+- Optional temporal smoothing: `drift_correction.temporal_moving_average_window`
+  (odd frame count; absent, 0–2 = off) applies `moving_average_within_phases` as the
+  last preprocessing/localization step in every branch (legacy, pipeline profile,
+  recovery source). It is centred, shrinks at edges, ignores nonfinite samples and
+  never averages across phase gaps. A 5-frame window reduced odd/even-frame error
+  1.2× with ~2% peak attenuation in the Cardio restoration benchmark.
+
+- `default_v2` unions reviewed/detected bounds, extends threshold-exceeding edges
+  by up to two frames, and aligns plate events with ≥50% well support after robust
+  endpoint-outlier rejection. Receipts and cache provenance retain consensus evidence.
+  Partial well-event observations now qualify only with quiet complete anchors,
+  identifiable basis coefficients and ≥80% explained energy; reviewed default
+  subtraction is unchanged. Read-only C4 missingness falls 83,790 → 76,890;
+  [missingness audit](preprocessing-c4-missing-audit.md) explains
+  the remaining 1,789 excess against reviewed per-pixel default.
+- Region exports in every profile now require ≥50% available weight, including
+  finite repaired samples. `min_available_weight` replaces `min_observed_weight`
+  (deprecated alias); observed/reconstructed fractions stay separate, with optional
+  per-method fractions. Missing weights are not renormalized.
+
+- Reviewed pulse repair now defaults to trimmed-SVD `low_rank` (`max_rank=3`,
+  `basis_variance=0.95`, `min_explained=0.8`) to handle different sensor segment
+  shapes/timings. Repairs retain unmodelled signal; large unexplained pulses and
+  incomplete anchors remain missing. Receipts expose bases, coefficient and
+  explained-fraction maps; `pulse_basis_similarities` compares wells by principal
+  angles. YAML supports rank/variance/explained overrides. Explicit `common_mode`,
+  `per_pixel` and the legacy numerical path are unchanged; clustering is deferred.
+
+- Optimized unified recovery medians and pulse eligibility prechecks while
+  preserving scalar fits, detector order and SciPy nonfinite/signed-zero behavior.
+  Level offsets select phase-local anchors in bounded pixel batches; single and
+  extrapolate modes retain their existing path. Optional well workers now bound
+  staging/submission and map raw arrays read-only. Content-addressed caches write
+  uncompressed NPZ and still read compressed entries. Exact synthetic/frozen-well
+  comparisons and timings are recorded in preprocessing-performance.md.
+
+- Reviewed acquisition intervals support a well-level `common_mode`
+  pulse model (`min_correlation=0.8`), with original phase-local anchors,
+  amplitude/correlation arrays and outcome receipts. Correlated pulses are
+  removed regardless of amplitude; unsupported anchors and large uncorrelated
+  pulses remain missing. `method: per_pixel` preserves prior behavior.
+  OBSERVED-only background now falls back to other eligible pixels, then
+  interpolates between supported frames within a phase, recording both actions.
+  Cache and CLI receipt serialization support the new arrays; legacy is unchanged.
+
 - Unified preprocessing now defaults to median phase-anchor levels, accepting
   finite repaired anchors as well as observations. Optional `extrapolate` limits
   each side to 300 seconds by default; the deprecated saved `robust` mode
@@ -110,3 +155,14 @@
 `processing.border_filter.allowed_pixel_mask_for_well` combines rectangular trims with optional saved binary-row masks in `filter_active_area_per_well`. `points_inside_allowed_area` rejects nonfinite/out-of-frame coordinates without clipping them inward. EPIC localization applies this mask to candidate centers; microscope consumers additionally check full footprints and restrict region growth. Legacy projects are unaffected until an active-area mask is supplied.
 
 - `processing.active_area` provides scriptable raw-map boundary detection. `pipeline.preprocess_data` returns detected masks in the new optional `PreprocessResult.active_area_filters` field; `run_pipeline` applies them before localization. `apply_detected_border_filters` preserves stricter manual trims. Detection always uses full-acquisition frame zero with a two-pixel margin, independent of selected phases and correction results. Direct legacy `epic_cardio.processing.preprocessing` calls keep their existing return signature.
+## 2026-10-14 — reordered unified recovery
+
+- Added opt-in `default_v2`: median registration with codes/masks, early detected/reviewed well events,
+  strict low-rank anchor-line replacement (CURATED=6), and immutable joint pixel labels before fixes.
+- Added exclusion curation, 15-frame pulse recovery, conservative regional biological-step preservation,
+  OBSERVED/TEMPORAL spatial donors, background fallback, and immediate-edge `offset_unanchored` receipts.
+  Existing profile array oracles remain unchanged; implementation/config provenance hashes change as usual.
+- Added combined synthetic regression tests and a read-only C1 benchmark helper under `tests/`.
+- Three-run C1 medians (`default` → `default_v2`): July result1 5.827 → 1.952 s;
+  March result 2.124 → 1.903 s. Regional preservation is a conservative ≥10% heuristic;
+  neighbour consensus alone cannot distinguish biological steps from sensor offsets.

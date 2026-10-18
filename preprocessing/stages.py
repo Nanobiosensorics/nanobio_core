@@ -7,12 +7,12 @@ import numpy as np
 from ..processing.active_area import active_area as detect_active_area
 from ..epic_cardio.data_correction import _phase_translation, _shift_phase_frames
 from ..epic_cardio.math_ops import find_local_maxima
-from .model import StageState, PreprocessResult, OBSERVED, MISSING, EXCLUDED
+from .model import StageState, PreprocessResult, OBSERVED, TEMPORAL, CURATED, MISSING, EXCLUDED
 from .recovery import (
     recover_pixels, detect_returning_pulses, detect_short_gaps, detect_persistent_steps,
     detect_terminal_dropouts, temporal_interpolate, spatial_fill, stitch_step,
 )
-from .curation import apply_curation
+from .curation import apply_curation, load_curation
 
 
 def _nanmedian(values, axis=0):
@@ -21,12 +21,23 @@ def _nanmedian(values, axis=0):
         return np.nanmedian(values, axis=axis)
 
 
-def validity(raw, config):
+def validity(raw, config, curation=None):
     values = np.asarray(raw.values_nm, dtype=np.float64).copy()
     valid = (raw.codes != 0) & np.isfinite(values)
+    reviewed = np.zeros(len(values), bool)
+    for entry in load_curation(curation):
+        if (entry['well'] == raw.well
+                and entry.get('method', config.curation.method) in ('low_rank', 'common_mode')):
+            start, end = entry['start_frame'], entry['end_frame']
+            if not 0 <= start < end <= len(values):
+                raise ValueError('Curation interval outside acquisition')
+            reviewed[start:end] = True
     boundaries = [0, *raw.phases, len(values)]
     for left, right in zip(boundaries[:-1], boundaries[1:]):
         jumps = np.abs(np.diff(values[left:right], axis=0)) * 1000 > config.validity.max_jump_pm
+        # A reviewed pulse also causes its falling edge at end; that transition
+        # must not invalidate the first clean post-pulse anchor.
+        jumps[reviewed[left:right - 1] | reviewed[left + 1:right]] = False
         valid[left + 1:right] &= ~jumps
     if config.validity.flat_trace_is_missing:
         valid[:, np.all(np.diff(values, axis=0) == 0, axis=0)] = False
@@ -132,6 +143,12 @@ def background(state, config):
     coordinates = []
     eligible = state.allowed.copy()
     available = np.isfinite(state.values) & ~np.isin(state.method, [MISSING, EXCLUDED])
+    observed_only = config.profile_name == 'observed_only'
+    v2 = config.profile_name == 'default_v2'
+    if v2:
+        available &= np.isin(state.method, [OBSERVED, TEMPORAL, CURATED])
+    if observed_only:
+        available &= state.method == OBSERVED
     if state.raw.cell_mask is not None:
         eligible &= ~state.raw.cell_mask.astype(bool)
     if settings.coordinates:
@@ -149,20 +166,82 @@ def background(state, config):
             if len(coordinates) >= settings.n_pixels:
                 break
     trace = np.zeros(len(state.values))
+    fallback_pixels = []
+    interpolated_frames = []
     if coordinates and settings.method != 'none':
-        xs, ys = np.asarray(coordinates).T
-        samples = np.where(available[:, ys, xs], state.values[:, ys, xs], np.nan)
-        if settings.method == 'median':
-            trace = _nanmedian(samples, axis=1)
-        else:
-            count = np.isfinite(samples).sum(axis=1)
-            trace = np.divide(np.nansum(samples, axis=1), count,
-                              out=np.full(len(samples), np.nan), where=count > 0)
+        trace[:] = np.nan
+        if coordinates:
+            xs, ys = np.asarray(coordinates).T
+            samples = np.where(available[:, ys, xs], state.values[:, ys, xs], np.nan)
+            if settings.method == 'median':
+                trace = _nanmedian(samples, axis=1)
+            else:
+                count = np.isfinite(samples).sum(axis=1)
+                trace = np.divide(np.nansum(samples, axis=1), count,
+                                  out=np.full(len(samples), np.nan), where=count > 0)
+        if (observed_only or v2) and not np.isfinite(trace).all():
+            score = _nanmedian(np.where(available, np.abs(state.values), np.nan))
+            other_eligible = eligible & np.isfinite(score) & (score < settings.threshold_pm)
+            for x, y in coordinates:
+                other_eligible[y, x] = False
+            for frame in np.flatnonzero(~np.isfinite(trace)):
+                donors = other_eligible & available[frame]
+                if donors.any():
+                    samples = state.values[frame, donors]
+                    trace[frame] = np.median(samples) if settings.method == 'median' else np.mean(samples)
+                    fallback_pixels.append(dict(frame=int(frame), pixel_count=int(donors.sum())))
+            bounds = [0, *state.raw.phases, len(trace)]
+            for left, right in zip(bounds[:-1], bounds[1:]):
+                known = np.flatnonzero(np.isfinite(trace[left:right])) + left
+                if len(known) < 2:
+                    continue
+                missing = np.flatnonzero(~np.isfinite(trace[left:right])) + left
+                for frame in missing[(missing > known[0]) & (missing < known[-1])]:
+                    index = np.searchsorted(known, frame)
+                    neighbors = known[index - 1:index + 1]
+                    trace[frame] = np.interp(state.raw.time_s[frame], state.raw.time_s[neighbors],
+                                             trace[neighbors])
+                    interpolated_frames.append(dict(frame=int(frame), anchors=neighbors.tolist()))
         result.values[:, state.allowed] -= trace[:, None]
         result.method[~np.isfinite(result.values) & state.allowed[None]] = MISSING
     result.receipts['background'] = dict(parameters=asdict(settings), coordinates=coordinates,
-                                        trace_pm=trace.tolist(), available=bool(coordinates))
+                                        trace_pm=trace.tolist(), available=bool(coordinates),
+                                        fallback_pixels=fallback_pixels,
+                                        interpolated_frames=interpolated_frames,
+                                        unavailable_frames=np.flatnonzero(~np.isfinite(trace)).tolist())
     return result
+
+
+def _level_anchors(values, methods, count, before=False):
+    """Select phase-local anchors in time order without sorting complete traces."""
+    length, pixels = values.shape
+    if length < count:
+        return np.zeros((count, pixels)), np.zeros(pixels, dtype=bool)
+    valid = np.isfinite(values) & (methods != MISSING) & (methods != EXCLUDED)
+    indices = np.where(valid, np.arange(length)[:, None], -1 if before else length)
+    kth = length - count if before else count - 1
+    partitioned = np.partition(indices, kth, axis=0)
+    selected = np.sort(partitioned[-count:] if before else partitioned[:count], axis=0)
+    supported = (selected >= 0).all(axis=0) & (selected < length).all(axis=0)
+    selected = np.clip(selected, 0, length - 1)
+    return values[selected, np.arange(pixels)], supported
+
+
+def _level_offset(result, left, start, end, count):
+    """Bound anchor-selection temporaries while matching scalar addition order."""
+    offset = np.full(result.allowed.shape, np.nan)
+    ys, xs = np.nonzero(result.allowed)
+    for first in range(0, len(xs), 256):
+        y, x = ys[first:first + 256], xs[first:first + 256]
+        before, pre_support = _level_anchors(
+            result.values[left:start, y, x], result.method[left:start, y, x], count, before=True)
+        after, post_support = _level_anchors(
+            result.values[start:end, y, x], result.method[start:end, y, x], count)
+        supported = pre_support & post_support
+        delta = np.median(before, axis=0) - np.median(after, axis=0)
+        offset[y[supported], x[supported]] = delta[supported]
+        result.values[start:end, y[supported], x[supported]] += delta[supported]
+    return offset
 
 
 def phase_offset(state, config):
@@ -173,6 +252,11 @@ def phase_offset(state, config):
     if settings.mode != 'none':
         for i in range(1, len(bounds) - 1):
             left, start, end = bounds[i - 1:i + 2]
+            if settings.mode == 'level':
+                offset = _level_offset(result, left, start, end, settings.anchor_frames)
+                maps.append(dict(frame=start, offset_pm=offset.tolist(),
+                                 unsupported_pixels=int((state.allowed & ~np.isfinite(offset)).sum())))
+                continue
             offset = np.full(state.allowed.shape, np.nan)
             midpoint = (state.raw.time_s[start - 1] + state.raw.time_s[start]) / 2
             for y, x in zip(*np.nonzero(state.allowed)):
@@ -221,6 +305,10 @@ def _background_continuity(state, config, bounds):
         xs, ys = np.asarray(coordinates).T
         available = np.isfinite(state.values[:, ys, xs]) & ~np.isin(
             state.method[:, ys, xs], [MISSING, EXCLUDED])
+        if config.profile_name == 'observed_only':
+            available &= state.method[:, ys, xs] == OBSERVED
+        if config.profile_name == 'default_v2':
+            available &= np.isin(state.method[:, ys, xs], [OBSERVED, TEMPORAL, CURATED])
         samples = np.where(available, state.values[:, ys, xs], np.nan)
         if config.background.method == 'median':
             trace = _nanmedian(samples, axis=1)

@@ -53,7 +53,10 @@ class StageState:
     receipts: dict
     acquired_values: np.ndarray | None = None
     acquired_valid: np.ndarray | None = None
+    acquired_codes: np.ndarray | None = None
+    recovery_baselines: dict | None = None
 
     def copy(self):
         return StageState(self.raw, self.values.copy(), self.method.copy(),
-                          self.allowed.copy(), dict(self.receipts), self.acquired_values, self.acquired_valid)
+                          self.allowed.copy(), dict(self.receipts), self.acquired_values,
+                          self.acquired_valid, self.acquired_codes, self.recovery_baselines)

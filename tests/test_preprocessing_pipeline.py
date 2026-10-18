@@ -171,7 +171,7 @@ def entry():
 
 @pytest.mark.parametrize('pulse_length', [3, 6])
 def test_curation_loading_repair_phase_guard_and_byte_identity(tmp_path, pulse_length):
-    interval = {**entry(), 'end_frame': 12 + pulse_length}
+    interval = {**entry(), 'end_frame': 12 + pulse_length, 'method': 'per_pixel'}
     path = tmp_path / 'curation.yml'
     path.write_text('entries:\n  - ' + '\n    '.join(f'{k}: {v}' for k, v in interval.items()) + '\n')
     assert load_curation(path) == [interval]
@@ -241,7 +241,8 @@ def test_weighted_export_fractional_example_and_missing_support():
     assert np.all(observed == 1) and np.all(reconstructed == 0)
     result.method[0, 5, 6] = SPATIAL
     values, observed, reconstructed = weighted_region_sum(result, region)
-    assert np.isnan(values[0]) and observed[0] == 0.25 and reconstructed[0] == 0.75
+    # Reconstructed signal contributes available weight without renormalizing the sum.
+    assert values[0] == 175 and observed[0] == 0.25 and reconstructed[0] == 0.75
     result.values_pm[1, 5, 6] = np.nan
     assert np.isnan(weighted_region_sum(result, region)[0][1])
 

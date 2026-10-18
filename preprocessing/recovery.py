@@ -23,6 +23,23 @@ def _valid_centered_median(values, radius=5, minimum_observations=3):
     return median[width - 1:width - 1 + len(values)]
 
 
+def _centered_median(values, radius):
+    """Match SciPy's nearest-edge rank filter, retaining its nonfinite behavior."""
+    width = 2 * radius + 1
+    finite = np.isfinite(values).all(axis=0)
+    # Rank selection and moving medians can choose different signs among tied zeros.
+    finite &= ~((values == 0) & np.signbit(values)).any(axis=0)
+    result = np.empty_like(values)
+    if finite.any():
+        traces = values[:, finite]
+        padded = np.pad(traces, ((radius, radius), (0, 0)), mode='edge')
+        result[:, finite] = bn.move_median(padded, window=width, min_count=width, axis=0)[width - 1:]
+    if (~finite).any():
+        result[:, ~finite] = ndimage.median_filter(
+            values[:, ~finite, None], size=(width, 1, 1), mode='nearest')[:, :, 0]
+    return result
+
+
 def _spatial_operator(hole, observed, allowed, config):
     """Compile a linear map from ORIGINAL donors, including a joint harmonic solve."""
     yy, xx = np.nonzero(hole)
@@ -130,15 +147,26 @@ def fill_spatial_frame(values, observed, targets, allowed, config=None, cache=No
 
 def detect_returning_pulses(trace, known, changes, time, left, methods, y, x, config):
     intervals = []
+    candidates = np.flatnonzero(np.abs(changes) > config.threshold_pm) + 1
+    candidates = candidates[candidates >= config.anchor_frames]
+    if not len(candidates):
+        return intervals
     method_trace = methods[left:left + len(trace), y, x].copy()
-    for a in np.flatnonzero(np.abs(changes) > config.threshold_pm) + 1:
-        if a < config.anchor_frames or method_trace[a] == TEMPORAL:
+    choices = candidates[:, None] + np.arange(1, config.temporal_gap + 1)
+    in_range = choices < len(known) - config.anchor_frames + 1
+    right_anchors = np.unique(choices[in_range])
+    medians = np.empty(len(trace))
+    medians[right_anchors] = np.median(
+        trace[right_anchors[:, None] + np.arange(config.anchor_frames)], axis=1)
+    missing_prefix = np.r_[0, np.cumsum(~known)]
+    for a, ends, enabled in zip(candidates, choices, in_range):
+        if method_trace[a] == TEMPORAL:
             continue
-        for b in range(a + 1, min(a + config.temporal_gap + 1, len(known) - config.anchor_frames + 1)):
-            if not known[a - config.anchor_frames:b + config.anchor_frames].all():
-                continue
-            if abs(trace[b] - np.median(trace[b:b + config.anchor_frames])) * 1000 > config.threshold_pm:
-                continue
+        ends = ends[enabled]
+        supported = missing_prefix[ends + config.anchor_frames] == missing_prefix[a - config.anchor_frames]
+        # Preserve the scalar comparison's NaN behavior and sequential TEMPORAL suppression.
+        supported &= ~(np.abs(trace[ends] - medians[ends]) * 1000 > config.threshold_pm)
+        for b in ends[supported]:
             anchors = np.r_[np.arange(a - config.anchor_frames, a), np.arange(b, b + config.anchor_frames)]
             offsets = time[left + anchors] - time[left + a]
             fit = np.polyfit(offsets, trace[anchors], 1)
@@ -298,10 +326,9 @@ def recover_pixels(values, original_valid, time, phases, allowed, config=None):
             measured_residual, config.median_radius, config.minimum_observations)
         suspect = np.abs(residual) > np.maximum(config.threshold_pm, config.noise_multiplier * noise)
         changes = np.diff(segment, axis=0) * 1000
-        typical = ndimage.median_filter(changes, size=(2 * config.median_radius + 1, 1, 1), mode='nearest')
+        typical = _centered_median(changes, config.median_radius)
         deviations = changes - typical
-        step_noise = config.noise_scale * ndimage.median_filter(
-            np.abs(deviations), size=(2 * config.median_radius + 1, 1, 1), mode='nearest')
+        step_noise = config.noise_scale * _centered_median(np.abs(deviations), config.median_radius)
         candidate_map = np.abs(deviations) > np.maximum(config.threshold_pm,
                                                        config.noise_multiplier * step_noise)
         for y, x in zip(*np.nonzero(responsive)):

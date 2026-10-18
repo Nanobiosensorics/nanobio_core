@@ -1,10 +1,11 @@
 """Deterministic well orchestration and content-addressed result storage."""
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import replace
 import hashlib
 import inspect
 import json
+from operator import index
 from pathlib import Path
 import re
 import tempfile
@@ -50,13 +51,29 @@ def raw_hash(raw):
     return digest.hexdigest()
 
 
-def provenance_for(raw, config, curation=None):
-    return dict(raw_sha256=raw_hash(raw), config_hash=config.config_hash(),
-                code_version=code_version(), curation_hash=curation_hash(curation))
+def provenance_for(raw, config, curation=None, event_plan=None):
+    provenance = dict(raw_sha256=raw_hash(raw), config_hash=config.config_hash(),
+                      code_version=code_version(), curation_hash=curation_hash(curation))
+    if event_plan:
+        provenance['event_plan_hash'] = hashlib.sha256(
+            json.dumps(event_plan, sort_keys=True).encode()).hexdigest()
+    return provenance
 
 
 def cache_key(provenance):
     return hashlib.sha256(json.dumps(provenance, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _receipt_array(value):
+    if isinstance(value, np.ndarray):
+        return dict(__receipt_array__=value.tolist(), dtype=value.dtype.str)
+    raise TypeError(f'Cannot serialize receipt value {type(value).__name__}')
+
+
+def _restore_receipt_array(value):
+    if '__receipt_array__' in value:
+        return np.asarray(value['__receipt_array__'], dtype=value['dtype'])
+    return value
 
 
 class Cache:
@@ -74,7 +91,8 @@ class Cache:
             if saved != provenance:
                 raise ValueError('Cache provenance mismatch')
             return PreprocessResult(bundle['values_pm'], bundle['method'], bundle['coverage'],
-                                    json.loads(str(bundle['receipts'])), saved)
+                                    json.loads(str(bundle['receipts']), object_hook=_restore_receipt_array),
+                                    saved)
 
     def put(self, result):
         self.path.mkdir(parents=True, exist_ok=True)
@@ -82,9 +100,10 @@ class Cache:
         with tempfile.NamedTemporaryFile(dir=self.path, suffix='.npz', delete=False) as stream:
             temporary = Path(stream.name)
             try:
-                np.savez_compressed(stream, values_pm=result.values_pm, method=result.method,
-                                    coverage=result.coverage, receipts=json.dumps(result.receipts),
-                                    provenance=json.dumps(result.provenance))
+                np.savez(stream, values_pm=result.values_pm, method=result.method,
+                         coverage=result.coverage,
+                         receipts=json.dumps(result.receipts, default=_receipt_array),
+                         provenance=json.dumps(result.provenance))
                 stream.flush()
                 temporary.replace(path)
             finally:
@@ -126,15 +145,18 @@ def _legacy(raw, config, provenance):
     return PreprocessResult(values, method, np.mean(method == OBSERVED, axis=0), receipts, provenance)
 
 
-def preprocess_well(raw, config, curation=None):
+def preprocess_well(raw, config, curation=None, *, _event_plan=None):
     """Return signed pm values, per-sample methods, stage receipts and provenance."""
     curation = load_curation(curation)
-    provenance = provenance_for(raw, config, curation)
+    provenance = provenance_for(raw, config, curation, _event_plan)
     if config.profile_name == 'legacy':
         if curation:
             raise ValueError('Legacy regression profile does not support curation')
         return _legacy(raw, config, provenance)
-    state = stages.validity(raw, config)
+    if config.profile_name == 'default_v2':
+        from .v2 import preprocess_v2
+        return preprocess_v2(raw, config, curation, provenance, _event_plan)
+    state = stages.validity(raw, config, curation)
     for stage in (stages.active_area, stages.interphase_registration, stages.within_phase_recovery):
         state = stage(state, config)
     state = stages.curated_repairs(state, config, curation)
@@ -144,14 +166,65 @@ def preprocess_well(raw, config, curation=None):
 
 
 def _process_task(task):
-    raw, config, curation, cache = task
-    provenance = provenance_for(raw, config, curation)
+    raw, config, curation, cache, *plans = task
+    event_plan = plans[0] if plans else None
+    provenance = provenance_for(raw, config, curation, event_plan)
     result = cache.get(provenance) if cache is not None else None
     if result is None:
-        result = preprocess_well(raw, config, curation)
+        result = preprocess_well(raw, config, curation, _event_plan=event_plan)
         if cache is not None:
             cache.put(result)
     return raw.well, result
+
+
+def _store_raw_task(raw, directory):
+    """Write one active well for read-only mapping, avoiding large pool pickles."""
+    directory.mkdir()
+    for name in ('values_nm', 'codes', 'time_s', 'allowed', 'cell_mask'):
+        value = getattr(raw, name)
+        if value is not None:
+            np.save(directory / f'{name}.npy', value, allow_pickle=False)
+    return dict(phases=raw.phases, well=raw.well, phase_source=raw.phase_source)
+
+
+def _process_stored_task(directory, metadata, config, curation, cache, event_plan=None):
+    arrays = {path.stem: np.load(path, mmap_mode='r', allow_pickle=False)
+              for path in directory.glob('*.npy')}
+    raw = RawWell(**arrays, **metadata)
+    return _process_task((raw, config, curation, cache, event_plan))
+
+
+def _parallel_tasks(tasks, workers):
+    """Keep at most workers staged/submitted wells, and return requested order."""
+    results = {}
+    tasks = iter(enumerate(tasks))
+    with tempfile.TemporaryDirectory(prefix='cardio-wells-') as temporary:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            pending = {}
+
+            def submit_next():
+                item = next(tasks, None)
+                if item is None:
+                    return
+                position, (raw, config, curation, cache, *plans) = item
+                directory = Path(temporary) / str(position)
+                metadata = _store_raw_task(raw, directory)
+                future = executor.submit(_process_stored_task, directory, metadata, config, curation, cache,
+                                         *plans)
+                pending[future] = position, directory
+
+            for _ in range(workers):
+                submit_next()
+            while pending:
+                completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    position, directory = pending.pop(future)
+                    results[position] = future.result()
+                    for path in directory.iterdir():
+                        path.unlink()
+                    directory.rmdir()
+                    submit_next()
+    return dict(results[position] for position in sorted(results))
 
 
 def load_raw_measurement(path):
@@ -196,7 +269,10 @@ def load_raw_measurement(path):
 
 
 def preprocess_measurement(path, config, curation=None, wells=None, workers=None, cache=None):
-    """Process selected wells independently; cache=None performs no writes."""
+    """Process wells serially by default, with explicitly bounded optional workers."""
+    workers = 1 if workers is None else index(workers)
+    if workers < 1:
+        raise ValueError('Workers must be a positive integer')
     raw_wells, parameters = load_raw_measurement(path)
     curation = load_curation(curation)
     names = list(raw_wells) if wells is None else list(wells)
@@ -212,7 +288,15 @@ def preprocess_measurement(path, config, curation=None, wells=None, workers=None
             background = replace(config.background, coordinates=tuple(map(tuple, picks)))
             well_config = replace(config, background=background)
         tasks.append((raw_wells[name], well_config, curation, cache))
+    if config.profile_name == 'default_v2' and len(raw_wells) > 1 and tasks:
+        from .v2 import detect_event_bounds, plate_consensus
+        proposals = {raw.well: detect_event_bounds(raw, config, curation) for raw in raw_wells.values()}
+        phases = {}
+        for raw in raw_wells.values():
+            boundaries = [0, *raw.phases, len(raw.values_nm)]
+            phases[raw.well] = [[left, right] for left, right in zip(boundaries[:-1], boundaries[1:])]
+        plans = plate_consensus(proposals, config, phases)
+        tasks = [(*task, plans[task[0].well]) for task in tasks]
     if workers == 1 or len(tasks) < 2:
         return dict(map(_process_task, tasks))
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        return dict(executor.map(_process_task, tasks))
+    return _parallel_tasks(tasks, min(workers, len(tasks)))
