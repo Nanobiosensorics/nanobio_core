@@ -1,9 +1,10 @@
-import numpy as np
-from .cell_maxima import get_coords_from_local_maxima, get_dilated_mask, get_avg_signal, find_local_maxima
-from scipy.signal import argrelextrema
-from skimage.restoration import denoise_tv_chambolle
-from scipy.signal import find_peaks
 import cv2
+import numpy as np
+from scipy.signal import argrelextrema, find_peaks
+from skimage.restoration import denoise_tv_chambolle
+
+from .cell_maxima import find_local_maxima, get_avg_signal, get_coords_from_local_maxima, get_dilated_mask
+
 
 def get_unique_coords(data):
     '''
@@ -143,7 +144,6 @@ def calculate_cells(well):
     # plt.show()
     # 3 dimenzióban kirajzolom, az aktív pontok térbeli és időbeli elhelyezkedését
     # data = pd.DataFrame(coords, columns=['X', 'Y', 'T'])
-    # display_active_coords(data)
 
     # A cell start paraméter az alapján állapítható meg, hogy 
     # milyen időpontban jelennek meg sejtek a 3D-s grafikonon

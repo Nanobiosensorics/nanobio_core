@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
+from scipy import ndimage
 
 from ..epic_cardio.data_correction import correct_well
 from ..epic_cardio.defs import WELL_NAMES
@@ -84,7 +85,6 @@ def build_foreground_pixel_set(
     if pre_cube.ndim != 3 or pre_cube.size == 0:
         return np.empty((0, 2), dtype=np.int32)
 
-    from scipy import ndimage
 
     preview_image = np.max(np.asarray(pre_cube, dtype=np.float32), axis=0)
     data_max = np.asarray(ndimage.maximum_filter(preview_image, int(neighborhood_size)), dtype=np.float32)

@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-from matplotlib import animation
 import numpy as np
+from matplotlib import animation
+
 
 def animate_well(data, filename, nframes, vmin, vmax, text):
     '''

@@ -1,9 +1,10 @@
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 import scipy
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
-import numpy as np
-import matplotlib.pyplot as plt
-import cv2
+
 
 def corr_data(data):
     corr_data = data.copy()

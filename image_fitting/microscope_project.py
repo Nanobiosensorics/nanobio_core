@@ -1,4 +1,5 @@
 """Read microscope projects v1–v5 without rewriting source data."""
+
 import copy
 import hashlib
 from pathlib import Path

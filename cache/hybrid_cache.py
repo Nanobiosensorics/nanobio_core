@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
-import time
 from typing import Any, Callable
 
 import numpy as np
@@ -12,6 +12,7 @@ from .config import CacheConfig, cache_config_from_env_or_defaults
 from .disk_store import DiskArrayStore
 from .key_serializer import KeySerializer
 from .tempdir_manager import TempDirManager
+
 
 _SHARED_MANAGER: TempDirManager | None = None
 _SHARED_CONFIG: CacheConfig | None = None

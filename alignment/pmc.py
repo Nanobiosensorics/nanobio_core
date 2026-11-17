@@ -5,6 +5,7 @@ from typing import List, Set
 import numpy as np
 from scipy.spatial import cKDTree
 
+
 """
 :param source_points: numpy array containing points which will be translated. (-1, 2) shaped.
 :param target_points: numpy array containing the points where the source points will be translated to. (-1, 2) shaped.

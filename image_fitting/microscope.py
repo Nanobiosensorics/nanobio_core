@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
-import time
 
 import cv2
 import numpy as np
+import tifffile
 
 from ..alignment.pmc import find_translation_pmc
 from ..alignment.stochastic import find_translation_stochastic
 from ..alignment.utils import calculate_microscope_cell_centroids
 from ..epic_cardio.defs import WELL_NAMES
+
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
 WellFileSelection = Dict[str, Dict[str, str]]
@@ -124,7 +126,6 @@ def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None)
             mask = np.asarray(payload)
         mask = np.squeeze(mask)
     elif suffix in {'.tif', '.tiff'}:
-        import tifffile
         try:
             mask = tifffile.imread(path)
         except (OSError, ValueError, RuntimeError) as exc:

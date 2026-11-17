@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass
 import hashlib
 import json
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 import numpy as np

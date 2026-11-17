@@ -1,8 +1,11 @@
-import numpy as np
 import os
-import pandas as pd
 import re
 from string import ascii_uppercase
+
+import numpy as np
+import pandas as pd
+
+
     
 def load_measurement(dir_path):
     '''
@@ -227,7 +230,6 @@ def wl_map_to_wells(wl_map, flip=[False, False]):
             for names, i in zip(WELL_IDS, range(0, 240, WIDTH)) for name, j in zip(names, range(0, 320, WIDTH))}
 
 def wl_map_to_wells_384w(wl_map, flip=False, padding = 4):
-    from string import ascii_uppercase
     WIDTH = 30
     grid = []
     for i in range(16):

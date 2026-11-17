@@ -3,13 +3,8 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from ..epic_cardio import processing
-from ..processing.active_area import detect_active_areas, apply_detected_border_filters
-from ..models.result import (
-    LoadDataResult,
-    LocalizationResult,
-    PipelineRunResult,
-    PreprocessResult,
-)
+from ..models.result import LoadDataResult, LocalizationResult, PipelineRunResult, PreprocessResult
+from ..processing.active_area import apply_detected_border_filters, detect_active_areas
 
 
 def load_measurement_data(data_path: str, result_path: str, flip) -> LoadDataResult:

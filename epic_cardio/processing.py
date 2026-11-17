@@ -1,18 +1,22 @@
-from operator import itemgetter
-from dataclasses import dataclass
-import numpy as np
-import os
-from typing import Any, Callable, Dict, Optional
-from .data_correction import correct_well, correct_interphase_well_shifts, interpolate_frame_jumps
-from .filter import border_filter_for_well
-from ..processing.border_filter import allowed_pixel_mask_for_well, points_inside_allowed_area
-from .math_ops import calculate_cell_maximas
-from .measurement_load import load_measurement, wl_map_to_wells, load_high_freq_measurement
-from .defs import *
 import json
+import os
+from dataclasses import dataclass
+from operator import itemgetter
+from typing import Any, Callable, Dict, Optional
+
+import numpy as np
 from scipy.ndimage import distance_transform_edt, label as label_connected
 from skimage.segmentation import watershed
 from tqdm import tqdm
+
+from ..image_fitting.microscope import project_mask_to_epic
+from ..processing.border_filter import allowed_pixel_mask_for_well, points_inside_allowed_area
+from .data_correction import correct_interphase_well_shifts, correct_well, interpolate_frame_jumps
+from .defs import *
+from .filter import border_filter_for_well
+from .math_ops import calculate_cell_maximas
+from .measurement_load import load_high_freq_measurement, load_measurement, wl_map_to_wells
+
 
 class RangeType():
     MEASUREMENT_PHASE=0
@@ -399,7 +403,6 @@ def subpixel_watershed(signal, microscope_mask, translation, scale, threshold=16
     paths, never across background gaps. Fractions use the entire sensor area
     as denominator.
     """
-    from ..image_fitting.microscope import project_mask_to_epic
 
     signal = np.asarray(signal, dtype=np.float32)
     if signal.ndim != 2 or subdivisions < 1:

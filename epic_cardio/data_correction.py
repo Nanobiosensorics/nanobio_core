@@ -1,11 +1,13 @@
 import bottleneck as bn
-import numpy as np
-from scipy.ndimage import distance_transform_edt
-from scipy import ndimage
-from scipy.spatial import cKDTree
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy import ndimage
+from scipy.ndimage import distance_transform_edt
+from scipy.spatial import cKDTree
+
 from .math_ops import find_local_maxima
+
 
 def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5, layer=0):
     # Get the indices of the true elements in the boolean array

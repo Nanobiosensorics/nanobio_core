@@ -4,9 +4,9 @@ Notation describes interventions at phase boundaries, never measured times or ou
 The parser accepts only explicit syntax and never interprets legacy free-text labels.
 """
 
-from copy import deepcopy
 import math
 import re
+from copy import deepcopy
 
 
 SCHEMA_VERSION = 1

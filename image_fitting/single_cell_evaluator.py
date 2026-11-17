@@ -1,13 +1,16 @@
-import numpy as np
-from .funcs import *
-from ..epic_cardio.math_ops import get_max_well
-from datetime import datetime
-import os
-import pandas as pd
 import json
-from skimage.segmentation import watershed
-from scipy import ndimage as ndi
+import os
+from datetime import datetime
+
 import cv2
+import numpy as np
+import pandas as pd
+from scipy import ndimage as ndi
+from skimage.segmentation import watershed
+
+from ..epic_cardio.math_ops import get_max_well
+from .funcs import *
+
 
 def dice_loss(y, p):
     return np.abs(1 - ((2*np.sum(y*p) + 1) / (np.sum(y) + np.sum(p) + 1)))
