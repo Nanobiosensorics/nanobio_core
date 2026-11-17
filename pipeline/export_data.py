@@ -9,7 +9,6 @@ from scipy import ndimage
 from ..epic_cardio.data_correction import correct_well
 from ..epic_cardio.defs import WELL_NAMES
 
-
 @dataclass(frozen=True)
 class MicroscopeCellImageData:
     label: int
@@ -21,7 +20,6 @@ class MicroscopeCellImageData:
     strategy_contour: np.ndarray
     crop_bounds: Tuple[int, int, int, int]
     overlay_alpha: float = 0.35
-
 
 def pixel_coordinates_and_weights(pixel_set: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Normalize ``(x, y)`` or weighted ``(x, y, participation)`` rows."""
@@ -35,7 +33,6 @@ def pixel_coordinates_and_weights(pixel_set: np.ndarray) -> tuple[np.ndarray, np
         else np.ones(values.shape[0], dtype=np.float32)
     )
     return coords, np.clip(weights, 0.0, 1.0)
-
 
 def extract_signal_lines(
     ptss_selected: np.ndarray,
@@ -76,7 +73,6 @@ def extract_signal_lines(
         use_pixel_sets,
     )
 
-
 def build_foreground_pixel_set(
     pre_cube: np.ndarray,
     foreground_threshold: float,
@@ -84,7 +80,6 @@ def build_foreground_pixel_set(
 ) -> np.ndarray:
     if pre_cube.ndim != 3 or pre_cube.size == 0:
         return np.empty((0, 2), dtype=np.int32)
-
 
     preview_image = np.max(np.asarray(pre_cube, dtype=np.float32), axis=0)
     data_max = np.asarray(ndimage.maximum_filter(preview_image, int(neighborhood_size)), dtype=np.float32)
@@ -94,7 +89,6 @@ def build_foreground_pixel_set(
     if len(xs) == 0:
         return np.empty((0, 2), dtype=np.int32)
     return np.column_stack((xs, ys)).astype(np.int32, copy=False)
-
 
 def combine_pixel_sets(pixel_sets: Iterable[np.ndarray] | None) -> np.ndarray:
     if pixel_sets is None:
@@ -119,7 +113,6 @@ def combine_pixel_sets(pixel_sets: Iterable[np.ndarray] | None) -> np.ndarray:
         return np.asarray([[x, y, weight] for (x, y), weight in rows], dtype=np.float32)
     return np.asarray([[x, y] for (x, y), _weight in rows], dtype=np.int32)
 
-
 def aggregate_signal_for_pixel_set(
     pre_cube: np.ndarray,
     pixel_set: np.ndarray,
@@ -132,7 +125,6 @@ def aggregate_signal_for_pixel_set(
     ys = np.clip(coords[:, 1], 0, pre_cube.shape[1] - 1)
     values = np.asarray(pre_cube[:, ys, xs], dtype=np.float32)
     return np.sum(values * weights[None, :], axis=1, dtype=np.float32)
-
 
 def build_microscope_cell_image_data(
     microscope_image: np.ndarray,
@@ -279,7 +271,6 @@ def build_microscope_cell_image_data(
         overlay_alpha=float(np.clip(float(overlay_alpha), 0.0, 1.0)),
     )
 
-
 def select_microscope_strategy_epic_ids(
     strategy: str,
     focused_region: np.ndarray,
@@ -324,7 +315,6 @@ def select_microscope_strategy_epic_ids(
 
     return np.asarray(selected_ids, dtype=np.int32)
 
-
 def segment_contour_from_region(region: np.ndarray) -> np.ndarray:
     region_mask = np.asarray(region, dtype=bool)
     if region_mask.size == 0 or not np.any(region_mask):
@@ -340,7 +330,6 @@ def segment_contour_from_region(region: np.ndarray) -> np.ndarray:
     )
     return region_mask & (~eroded)
 
-
 def compute_breakdowns(raw_wells: Dict[str, np.ndarray], full_phases: List[int]) -> Dict[str, int]:
     breakdowns: Dict[str, int] = {}
     for name in WELL_NAMES:
@@ -350,7 +339,6 @@ def compute_breakdowns(raw_wells: Dict[str, np.ndarray], full_phases: List[int])
         breakdowns[name] = int(peak_until)
     return breakdowns
 
-
 def build_signal_parts(raw_lines_selected: np.ndarray, phases: List[int]) -> List[Tuple[int, np.ndarray]]:
     parts: List[Tuple[int, np.ndarray]] = []
     for idx, (start, end) in enumerate(zip([0] + phases, phases + [None])):
@@ -359,7 +347,6 @@ def build_signal_parts(raw_lines_selected: np.ndarray, phases: List[int]) -> Lis
         selection *= 1000
         parts.append((idx, selection))
     return parts
-
 
 def build_breakdown_lines(
     raw_well: np.ndarray,

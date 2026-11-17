@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import DefaultDict
 
-
 class CacheMetrics:
     def __init__(self) -> None:
         self._counters: DefaultDict[str, int] = defaultdict(int)

@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import animation
 
-
 def animate_well(data, filename, nframes, vmin, vmax, text):
     '''
         Animate a single well image sequence.
@@ -20,7 +19,6 @@ def animate_well(data, filename, nframes, vmin, vmax, text):
     im = plt.imshow(data[-1, :, :],interpolation='none', vmin=vmin, vmax=vmax)
     plt.colorbar()
     plt.title(text)
-
 
     # animation function.  This is called sequentially
     def animate(i):

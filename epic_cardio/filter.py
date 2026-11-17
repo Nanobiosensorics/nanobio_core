@@ -4,7 +4,6 @@ from ..processing.border_filter import (border_filter_for_well, default_border_f
                                         sanitize_border_filter, set_border_filter_for_all,
                                         set_border_filter_for_well)
 
-
 __all__ = [
     "border_filter_for_well",
     "default_border_filter",

@@ -1,6 +1,5 @@
 import numpy as np
 
-
 """
 Calculates the optimal affine transformation with least squares.
 :param source_points: numpy array containing points which will be translated.
@@ -28,4 +27,3 @@ def get_affine_transformation(source_points: np.ndarray, target_points: np.ndarr
     # Converting params to matrix and transpone to work with row vector.
     affine = np.append(params, [0, 0, 1]).reshape(3, 3)
     return affine.T
-

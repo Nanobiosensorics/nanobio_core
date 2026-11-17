@@ -5,7 +5,6 @@ import scipy
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 
-
 def corr_data(data):
     corr_data = data.copy()
     for n in range(0, corr_data.shape[0]):

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .config import CacheConfig
 
-
 class TempDirManager:
     def __init__(self, config: CacheConfig) -> None:
         self._config = config

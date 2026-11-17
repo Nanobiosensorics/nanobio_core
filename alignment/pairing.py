@@ -1,6 +1,5 @@
 import numpy as np
 
-
 """
     :param source_points: numpy array containing points which will be translated.
     :param target_points: numpy array containing the points where the source points will be translated to.
@@ -35,4 +34,3 @@ def make_pairing(source_points: np.ndarray, target_points: np.ndarray, translati
           used_target_idx.add(j)
 
   return result
-

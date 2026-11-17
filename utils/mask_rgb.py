@@ -2,9 +2,6 @@ import colorsys
 
 import numpy as np
 
-
-    
-
 def rgb_to_hsv(arr):
     rgb_to_hsv_channels = np.vectorize(colorsys.rgb_to_hsv)
     r, g, b = np.rollaxis(arr, axis=-1)

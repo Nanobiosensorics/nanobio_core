@@ -7,7 +7,6 @@ from typing import Any
 
 import numpy as np
 
-
 class KeySerializer:
     def normalize(self, key: Any) -> Any:
         try:

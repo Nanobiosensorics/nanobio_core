@@ -3,13 +3,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
-
 
 def _env_int_mb(name: str, default_mb: int) -> int:
     raw = os.getenv(name)
@@ -20,7 +18,6 @@ def _env_int_mb(name: str, default_mb: int) -> int:
     except (TypeError, ValueError):
         return default_mb * 1024 * 1024
     return max(0, value) * 1024 * 1024
-
 
 @dataclass(frozen=True)
 class CacheConfig:
@@ -33,7 +30,6 @@ class CacheConfig:
     compression: str = "none"
     cleanup_on_exit: bool = True
     readonly_arrays: bool = True
-
 
 def cache_config_from_env_or_defaults() -> CacheConfig:
     cache_root = os.getenv("NANOBIO_CACHE_DIR")

@@ -1,6 +1,5 @@
 import numpy as np
 
-
 """
 Compute centroids for labeled cell instances in a 2D segmentation mask.
 
@@ -39,7 +38,6 @@ def calculate_microscope_cell_centroids(segmentation: np.ndarray):
     # Stack results (skip background label 0)
     return np.stack((centroids_x[1:], centroids_y[1:]), axis=1)
 
-
 """
 :param segmentation: microscope image segmentation mask where each cell instance
 is marked with an unique number started from 1. (cell ids are 1, 2, 3...)
@@ -52,4 +50,3 @@ def get_microscope_cell_centroids_mask(segmentation: np.ndarray):
     x, y = int(centroid[0]), int(centroid[1])
     mask[y][x] = 1
   return mask
-

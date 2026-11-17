@@ -13,10 +13,8 @@ from .disk_store import DiskArrayStore
 from .key_serializer import KeySerializer
 from .tempdir_manager import TempDirManager
 
-
 _SHARED_MANAGER: TempDirManager | None = None
 _SHARED_CONFIG: CacheConfig | None = None
-
 
 def _shared_manager(config: CacheConfig | None) -> tuple[TempDirManager, CacheConfig]:
     if config is not None:
@@ -35,7 +33,6 @@ def _shared_manager(config: CacheConfig | None) -> tuple[TempDirManager, CacheCo
     _SHARED_CONFIG = cfg
     return manager, cfg
 
-
 def cleanup_hybrid_cache_tempdir() -> None:
     global _SHARED_MANAGER
     global _SHARED_CONFIG
@@ -44,7 +41,6 @@ def cleanup_hybrid_cache_tempdir() -> None:
     _SHARED_MANAGER.cleanup()
     _SHARED_MANAGER = None
     _SHARED_CONFIG = None
-
 
 @dataclass
 class _Entry:
@@ -58,7 +54,6 @@ class _Entry:
     file_path: str | None
     access_count: int
     last_access_ns: int
-
 
 class HybridPartitionCache:
     def __init__(

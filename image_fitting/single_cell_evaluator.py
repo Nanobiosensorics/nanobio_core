@@ -11,7 +11,6 @@ from skimage.segmentation import watershed
 from ..epic_cardio.math_ops import get_max_well
 from .funcs import *
 
-
 def dice_loss(y, p):
     return np.abs(1 - ((2*np.sum(y*p) + 1) / (np.sum(y) + np.sum(p) + 1)))
 
@@ -132,7 +131,6 @@ class CardioMicSingleCellEvaluator():
         im_contour = np.zeros(im_markers.shape).astype('uint8')
         im_contour[im_markers > 0] = 1
         im_contour = get_contour(im_contour, 1)
-
 
         im_cardio_tr = cv2.resize(im_cardio,
                         (round(shape[1] * resolution), round(shape[0] * resolution)),
@@ -329,7 +327,6 @@ class CardioMicSingleCellEvaluator():
                            'dl_p': dl_p_s,
                            'dl_cp': dl_cp_s,
                            'dl_w': dl_w_s}, fp)
-
 
 def evaluate(*args, **kwargs):
     """Stable functional entry point for single-cell evaluation."""

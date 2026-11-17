@@ -5,7 +5,6 @@ from typing import List, Set
 import numpy as np
 from scipy.spatial import cKDTree
 
-
 """
 :param source_points: numpy array containing points which will be translated. (-1, 2) shaped.
 :param target_points: numpy array containing the points where the source points will be translated to. (-1, 2) shaped.
@@ -46,7 +45,6 @@ def __build_graph(source_points: np.ndarray, target_points: np.ndarray, epsilon:
       adjacency_list[a].add(int(b))
 
   return correspondence_vectors, adjacency_list
-
 
 # Gets the candidates which are needed to be evaluated to find the maximal clique.
 def __get_required_candidates(S: List[int], F: Set[int], gamma: List[Set[int]]):

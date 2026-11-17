@@ -8,7 +8,6 @@ from scipy.spatial import cKDTree
 
 from .math_ops import find_local_maxima
 
-
 def select_indices(array, threshold, num_indices, spacing = 2, random_distance=5, layer=0):
     # Get the indices of the true elements in the boolean array
     
@@ -61,7 +60,6 @@ def dilate_mask(mask, times=1):
     ])
     return mask
 
-
 def _centered_moving_median(values, radius):
     window_size = 2 * radius + 1
     padded = np.pad(values, ((radius, radius), (0, 0), (0, 0)), mode="edge")
@@ -69,7 +67,6 @@ def _centered_moving_median(values, radius):
         padded, window=window_size, min_count=window_size, axis=0,
     )
     return trailing[window_size - 1:window_size - 1 + len(values)]
-
 
 def _interpolate_phase_jumps(segment, threshold, max_gap):
     corrected = segment.copy()
@@ -109,7 +106,6 @@ def _interpolate_phase_jumps(segment, threshold, max_gap):
         )
 
     return corrected, corrected_mask
-
 
 def interpolate_frame_jumps(well, threshold=75.0, phases=(), max_gap=5):
     """Interpolate trace-local artifacts without crossing phase boundaries.
@@ -216,7 +212,6 @@ def _phase_translation(source_points, target_points, radius=3):
         return np.zeros(2, dtype=np.int32)
     return best[1]
 
-
 def _shift_phase_frames(frames, translation):
     """Apply an integer translation with nearest-edge fill and no wraparound."""
     dx, dy = (int(value) for value in translation)
@@ -226,7 +221,6 @@ def _shift_phase_frames(frames, translation):
     source_x = np.clip(np.arange(width) - dx, 0, width - 1)
     source_y = np.clip(np.arange(height) - dy, 0, height - 1)
     return frames[:, source_y[:, None], source_x[None, :]]
-
 
 def correct_interphase_well_shifts(raw_well, phases, threshold, coords, mode,
                                    pixel_filtering=True):

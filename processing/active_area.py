@@ -6,7 +6,6 @@ from skimage.filters import threshold_otsu
 
 from .border_filter import border_filter_for_well
 
-
 def active_area(image, margin=2):
     """Return the raw active footprint and its inward sensor-pixel margin."""
     if margin not in (1, 2):
@@ -27,10 +26,8 @@ def active_area(image, margin=2):
         raise ValueError(f'Unexpectedly small active sensor area: {allowed.sum()} pixels')
     return active, allowed, threshold
 
-
 def encode_mask(mask):
     return [''.join('1' if value else '0' for value in row) for row in mask]
-
 
 def rectangle_trims(mask):
     yy, xx = np.nonzero(mask)
@@ -38,7 +35,6 @@ def rectangle_trims(mask):
         raise ValueError('Detected active sensor area is empty')
     return dict(top=int(yy.min()), bottom=int(mask.shape[0] - 1 - yy.max()),
                 left=int(xx.min()), right=int(mask.shape[1] - 1 - xx.max()))
-
 
 def detect_active_areas(raw_wells, margin=2):
     """Detect from full-acquisition frame zero, before signal-range slicing."""
@@ -52,7 +48,6 @@ def detect_active_areas(raw_wells, margin=2):
                              raw_wavelength_threshold=threshold, source_frame=0,
                              method='raw_wavelength_otsu', border=rectangle_trims(allowed))
     return records
-
 
 def apply_detected_border_filters(localization_params, records):
     """Save detected masks while keeping any stricter existing manual trims."""

@@ -5,8 +5,6 @@ from string import ascii_uppercase
 import numpy as np
 import pandas as pd
 
-
-    
 def load_measurement(dir_path):
     '''
         Load the well image from a project folder created by the Epic Cardio. 

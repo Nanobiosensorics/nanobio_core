@@ -6,7 +6,6 @@ from ..epic_cardio import processing
 from ..models.result import LoadDataResult, LocalizationResult, PipelineRunResult, PreprocessResult
 from ..processing.active_area import apply_detected_border_filters, detect_active_areas
 
-
 def load_measurement_data(data_path: str, result_path: str, flip) -> LoadDataResult:
     filter_params, preprocessing_params, localization_params = processing.load_params(result_path)
     raw_wells, full_time, full_phases = processing.load_data(data_path, flip=flip)
@@ -18,7 +17,6 @@ def load_measurement_data(data_path: str, result_path: str, flip) -> LoadDataRes
         preprocessing_params=preprocessing_params,
         localization_params=localization_params,
     )
-
 
 def preprocess_data(
     raw_wells, full_time, full_phases, preprocessing_params, filter_ptss,
@@ -42,7 +40,6 @@ def preprocess_data(
         active_area_filters=active_area_filters,
     )
 
-
 def localize_data(
     raw_wells, phases, selected_range, preprocessing_params, localization_params, filter_ptss,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -59,7 +56,6 @@ def localize_data(
         )
     )
 
-
 def save_pipeline_metadata(result_path: str, localized_wells, preprocessing_params, localization_params) -> None:
     processing.save_params(
         result_path,
@@ -67,7 +63,6 @@ def save_pipeline_metadata(result_path: str, localized_wells, preprocessing_para
         preprocessing_params,
         localization_params,
     )
-
 
 def run_pipeline(data: Dict[str, Any], config: Dict[str, Any]) -> PipelineRunResult:
     preprocessed = preprocess_data(

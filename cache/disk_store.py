@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 
-
 class DiskArrayStore:
     def __init__(self, cache_root: str | None) -> None:
         self._cache_root = Path(cache_root) if cache_root else None

@@ -8,13 +8,11 @@ import math
 import re
 from copy import deepcopy
 
-
 SCHEMA_VERSION = 1
 COATINGS = {'noncoated': 'noncoated', 'rgd': 'ppr', 'ppr': 'ppr',
             'gelatin': 'gelatin', 'fibronectin': 'fibronectin', 'unknown': None}
 CELLS = {'hela': 'hela', 'preo': 'preo', 'mc3t3-e1': 'preo', 'nk92': 'nk92'}
 UNITS = {'uM', 'mM', 'nM', 'uL', 'mL', 'mg/mL', 'ug/mL', 'cells/mL', 'particles/mL', '%'}
-
 
 def split_terms(value, separator):
     """Split separators outside parentheses and reject unmatched parentheses."""
@@ -36,7 +34,6 @@ def split_terms(value, separator):
         raise ValueError('Empty annotation term')
     return result
 
-
 def quantity(value):
     value = value.strip().replace('µ', 'u').replace('μ', 'u')
     if value == '?':
@@ -51,13 +48,11 @@ def quantity(value):
         raise ValueError('Percentage exceeds 100')
     return dict(value=number, unit=match[2])
 
-
 def _token(value):
     match = re.fullmatch(r'([A-Za-z][A-Za-z0-9_-]*)(?:\(([^()]*)\))?', value.strip())
     if not match:
         raise ValueError(f'Invalid annotation token: {value!r}')
     return match[1], match[2]
-
 
 def _parameters(body, shorthand):
     if body is None:
@@ -82,7 +77,6 @@ def _parameters(body, shorthand):
         result[key] = parsed
     return result
 
-
 def _action(term):
     if term == '-':
         return dict(kind='no_change')
@@ -101,7 +95,6 @@ def _action(term):
         kind = 'compound' if lower == 'sal1' else 'vehicle'
         return dict(kind=kind, identity=lower, parameters=_parameters(body, 'final'))
     raise ValueError(f'Unknown annotation material: {name!r}')
-
 
 def parse_annotation(notation):
     """Return canonical JSON-serializable coating and ordered phase actions."""
@@ -146,7 +139,6 @@ def parse_annotation(notation):
         phases.append(dict(index=index, label=label, actions=actions))
     return dict(schema_version=SCHEMA_VERSION, notation=text, coating=coating, phases=phases)
 
-
 def build_plate_annotations(assignments, *, phase_binding=None, source=None, valid_wells=None):
     """Validate a complete import before returning an atomic session payload.
 
@@ -171,7 +163,6 @@ def build_plate_annotations(assignments, *, phase_binding=None, source=None, val
     if not wells:
         raise ValueError('Plate annotations cannot be empty')
     return dict(schema_version=SCHEMA_VERSION, wells=wells, source=deepcopy(source))
-
 
 def validate_plate_annotations(payload, *, valid_wells=None):
     """Reparse stored text and reject stale/tampered structured fields on reload."""

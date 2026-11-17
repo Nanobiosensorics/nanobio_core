@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-
 @dataclass
 class LoadDataResult:
     raw_wells: Dict[str, np.ndarray]
@@ -14,7 +13,6 @@ class LoadDataResult:
     filter_params: Dict[str, List[List[int]]]
     preprocessing_params: Dict[str, Any]
     localization_params: Dict[str, Any]
-
 
 @dataclass
 class PreprocessResult:
@@ -25,16 +23,13 @@ class PreprocessResult:
     selected_range: List[Optional[int]]
     active_area_filters: Dict[str, Any] = field(default_factory=dict)
 
-
 @dataclass
 class LocalizationResult:
     well_data: Dict[str, tuple]
 
-
 @dataclass
 class ExportResult:
     result_path: str
-
 
 @dataclass
 class PipelineRunResult:

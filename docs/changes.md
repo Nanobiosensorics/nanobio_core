@@ -1,97 +1,39 @@
 # Changes
 
+## 2026-10-14
+
+- Added per-well active-area masks for localization, complete microscope footprints and region growth. Invalid/out-of-frame coordinates are rejected without clipping.
+- Added automatic raw-map boundary detection from acquisition frame zero with a two-pixel margin. Pipeline results carry detected filters while preserving stricter manual trims.
+
 ## 2026-10-09
 
-- Reconciled parallel fractional-watershed additions, retaining embedded-package
-  relative imports alongside weighted signal exports and fine-label crop outlines.
-
-- Fractional watershed now expands full-region seeds through four-neighbour
-  threshold-foreground paths using flat marker-controlled watershed. Labels
-  cannot take shortcuts across background gaps in a connected region; the
-  intensity defines the boundary, not the separation gradient.
-
-- Corrected fractional watershed: partition connected threshold foreground on a
-  640×640 grid using complete microscope regions as seeds and direct foreground
-  contact paths. Sensor participation is the fraction of its 64 subpixels
-  assigned to each cell, including growth beyond the original mask. Unseeded
-  foreground remains empty, and the optional growth cap is enforced on this
-  partition. The same cached labels drive well overlays and GUI/export outlines.
-- Corrected exact mask-area projection at fractional sensor boundaries and
-  standardized native crop sampling to pixel centers and sensor-edge indexing.
-  IWS exports use `sum(signal × watershed participation)`; physical IWS in
-  analysis additionally multiplies by the sensor pixel area. The fine partition
-  has an 8×8 sampling precision per sensor pixel; existing CSVs require re-export.
-
-- Added native-mask sensor-pixel participation projection. Each label retains
-  its fractional occupied area when several high-resolution cells map to one
-  Cardio pixel, and signal aggregation accepts weighted `(x, y, fraction)`
-  regions for area-proportional integrated IWS.
-
-- Generalized labeled-mask projection to honor the requested output shape and
-  clipped watershed single-cell outlines to the native high-resolution label.
-
-- Replaced foreground-distance watershed basins with deterministic nearest-cover
-  partitioning inside each connected threshold component. The complete projected
-  cell footprint sets ownership distance; centroid distance breaks footprint ties.
-  Signal intensity only defines foreground and does not move cell boundaries.
-
-- Added label-specific sensor coverage projection using positive-area overlap
-  with source mask pixels. Unlike a center-sampled label image, these pixel sets
-  retain small labels and represent shared coverage without replacing label IDs.
-
-- Watershed uses one centroid-guided seed per overlapping label and the foreground
-  distance transform for separation. Optional `seed_points` map stable label IDs to
-  projected `(x, y)` coordinates; seed collisions use the nearest available footprint
-  pixel. Strict threshold background and optional growth bounds are preserved.
-  Microscope mask projection now samples sensor-pixel centers rather than corners,
-  eliminating a half-sensor-pixel offset from projected cell centroids.
+- Added fractional microscope-mask projection, retaining label identities and positive-area contributions when multiple cells share a sensor pixel.
+- Implemented threshold-bounded watershed partitioning on an 8×8 subpixel grid, with complete-footprint seeds, four-neighbour foreground paths and optional growth limits.
+- Corrected boundary projection and pixel-center sampling, removing half-sensor-pixel centroid offsets and clipping outlines to native labels.
+- Added weighted signal aggregation using sensor participation fractions; physical IWS multiplies the spatial sum by sensor pixel area. Existing CSVs require re-export.
+- Added stable seed-point mapping and deterministic overlap handling; intensity determines foreground rather than shifting cell boundaries.
 
 ## 2026-10-03
 
-- Valid empty microscope label TIFFs restore as empty candidate sets, allowing
-  nuclei-filtered wells with no eligible cells to remain in saved datasets.
-- Label TIFF decoding uses tifffile, including ZSTD-compressed edited masks.
-- Core environment dependencies explicitly include tifffile and imagecodecs
-  for compressed label-mask restoration.
+- Restored valid empty microscope masks as empty candidate sets.
+- Enabled compressed TIFF label loading with explicit tifffile/imagecodecs dependencies.
 
 ## 2026-10-01
 
-- Added a shared threshold-bounded watershed result API. The intensity threshold now defines
-  authoritative background, microscope labels below threshold remain unresolved instead of being
-  forced into the foreground, and optional growth limits are measured from each projected label
-  footprint. The legacy watershed entrypoint delegates to the same implementation.
-- Use package-relative imports in processing helpers so saved preprocessing can run
-  when core is imported through the evaluation repository's `src` package.
+- Added a shared threshold-bounded watershed API that preserves unresolved labels below threshold and measures growth limits from projected footprints.
+- Enabled saved preprocessing when importing core through the evaluation repository's `src` package.
 
 ## 2026-09-24
 
-- Kept fixed preprocessing behavior in core method defaults: invalid-pixel filtering and inter-phase
-  alignment always run, frame-jump correction defaults to five passes, and microscope watershed
-  segmentation defaults to threshold 160. Evaluator metadata no longer carries these values.
-- Added per-pixel interpolation for short Cardio signal artifacts. Bottleneck supplies the temporal
-  moving-median baseline, and the configured pm threshold identifies meaningful deviations from it.
-  Connected-run detection and NumPy linear interpolation remain phase-local, bounded to five frames
-  by default, and report correction summaries for pipeline
-  progress. Background correction now rejects masked, non-finite,
-  and out-of-range manual reference pixels before aggregation. Individual out-of-range samples are
-  zeroed without masking an otherwise usable sensor pixel for its complete trace.
-- Added optional per-well progress callbacks to preprocessing and localization pipeline helpers so
-  GUI callers can report restoration progress without parsing console output.
+- Kept invalid-pixel filtering and phase alignment in core defaults, with five frame-jump correction passes and microscope watershed threshold 160.
+- Added phase-local interpolation of short signal artifacts, bounded to five frames by default.
+- Validated manual background pixels and isolated invalid samples without discarding complete traces.
+- Added per-well preprocessing/localization progress callbacks for GUI callers.
 
 ## 2026-07-29
 
-- Added Cellpose `<well>_seg.npy` discovery and import. Dictionary payloads use the `masks` field, singleton dimensions are squeezed, and the resolved label mask must be two-dimensional.
-- Added foreground-pixel construction, pixel-set merging, and aggregate-signal helpers for evaluator exports.
-- Added `build_microscope_cell_image_data(...)` to construct selected-cell microscope crops, aligned EPIC overlays, focused-cell contours, and strategy-pixel contours without depending on Qt.
-- Unified microscope strategy-pixel selection for GUI and export crops so `cover`, `max`, and `watershed` contours use the same focused-cell overlap and fallback rules.
-- Added clamped overlay-alpha data to microscope single-cell export payloads so callers can reproduce GUI overlay opacity.
-
-- Added a read-only v1–v5 microscope project adapter with independent image/mask roots, active/channel/composite selection and fingerprint validation. Synchronized package-relative processing imports across embedded checkouts.
-
-- Removed unused fixed-resolution microscope pyramid caching and its public exports. Current consumers render native source regions at viewport resolution.
-
-## 2026-10-14 — active sensor area
-
-`processing.border_filter.allowed_pixel_mask_for_well` combines rectangular trims with optional saved binary-row masks in `filter_active_area_per_well`. `points_inside_allowed_area` rejects nonfinite/out-of-frame coordinates without clipping them inward. EPIC localization applies the mask to candidate centers; microscope consumers additionally check full footprints and restrict region growth. Legacy projects are unaffected until an active-area mask is supplied.
-
-- `processing.active_area` provides scriptable raw-map boundary detection. `pipeline.preprocess_data` returns detected masks in the new optional `PreprocessResult.active_area_filters` field; `run_pipeline` applies them before localization. `apply_detected_border_filters` preserves stricter manual trims. Detection always uses full-acquisition frame zero with a two-pixel margin, independent of selected phases and correction results. Direct legacy `epic_cardio.processing.preprocessing` calls keep their existing return signature.
+- Added Cellpose mask discovery and validated two-dimensional label import.
+- Added foreground/region aggregation helpers and Qt-independent selected-cell microscope crops with aligned sensor overlays.
+- Unified GUI/export strategy contours and exposed clamped overlay opacity.
+- Added a read-only v1–v5 microscope-project adapter with independent image/mask roots and fingerprint validation.
+- Removed unused fixed-resolution microscope pyramid caching; rendering uses native source regions at viewport resolution.

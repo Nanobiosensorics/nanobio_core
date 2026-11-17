@@ -8,7 +8,6 @@ import numpy as np
 import tifffile
 import yaml
 
-
 def read_microscope_project(path, *, payload=None):
     path = Path(path).expanduser().resolve()
     if payload is None:
@@ -66,7 +65,6 @@ def read_microscope_project(path, *, payload=None):
         row["active_mask"] = active or next(iter(records), None)
         samples.append(row)
     return payload, samples
-
 
 def select_project_mask(sample, reference=None):
     reference = reference or sample["active_mask"]

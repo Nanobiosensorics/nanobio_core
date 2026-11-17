@@ -17,11 +17,9 @@ from .filter import border_filter_for_well
 from .math_ops import calculate_cell_maximas
 from .measurement_load import load_high_freq_measurement, load_measurement, wl_map_to_wells
 
-
 class RangeType():
     MEASUREMENT_PHASE=0
     INDIVIDUAL_POINT=1
-
 
 @dataclass(frozen=True)
 class WatershedResult:
@@ -88,7 +86,6 @@ def save_params(path, well_data, preprocessing, localization):
     }
     with open(os.path.join(path, '.metadata/parameters.json'), 'w+') as f:
         json.dump(parameters, f)
-
 
 def preprocessing(
     preprocessing_params, wells, time, phases, background_coords={},
@@ -393,7 +390,6 @@ def threshold_bounded_watershed(signal, projected_labels, threshold=160,
         pixel_counts=pixel_counts,
     )
 
-
 def subpixel_watershed(signal, microscope_mask, translation, scale, threshold=160,
                        max_growth_distance=None, subdivisions=8):
     """Partition sensor foreground by complete microscope footprints on a finer grid.
@@ -439,7 +435,6 @@ def subpixel_watershed(signal, microscope_mask, translation, scale, threshold=16
     return owners, {
         label_id: np.asarray(rows, dtype=np.float32) for label_id, rows in participation.items()
     }
-
 
 def watershed_segmentation(well, coords, ws_threshold=160, distance_threshold=np.inf, mask=None):
     if well.ndim == 3:

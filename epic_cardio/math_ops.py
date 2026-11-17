@@ -5,7 +5,6 @@ from skimage.restoration import denoise_tv_chambolle
 
 from .cell_maxima import find_local_maxima, get_avg_signal, get_coords_from_local_maxima, get_dilated_mask
 
-
 def get_unique_coords(data):
     '''
        Selects the unique coordinates from the 3 dimensional coordinate matrix.
@@ -120,7 +119,6 @@ def get_most_selected(coords, freq):
             selected_coords_freq.append(coord_freq)
     return selected_coords_freq[np.argmax(np.asarray(selected_coords_freq)[:, 2])][:2]
 
-
 def calculate_cells(well):
     coords = get_coords_from_local_maxima(well)
     xy = coords[:, :2]
@@ -136,7 +134,6 @@ def calculate_cells(well):
     # A háttér levonása az eredeti wellből.
     for i in range(well_corr.shape[0]):
         well_corr[i, :, :] = well[i, :, :] - avgs[i]
-
 
     # Az átlagvonal
     # fig, ax = plt.subplots(figsize=(10, 5))
@@ -210,7 +207,6 @@ def calculate_cells(well):
     # plt.show()
 
     return well_corr, ptss, lines
-
 
 def calculate_cell_maximas(data, **kwargs):
     data_mx = np.max(data, axis = 0)

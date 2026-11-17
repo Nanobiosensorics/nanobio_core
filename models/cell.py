@@ -7,7 +7,6 @@ import numpy as np
 
 from .signal import CellSignal
 
-
 @dataclass
 class CellRecord:
     coordinates: np.ndarray

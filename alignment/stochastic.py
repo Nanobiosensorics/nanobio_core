@@ -1,6 +1,5 @@
 import numpy as np
 
-
 """
 This algorithm tries to match samples of source points to each target point.
 One occurence of a match is described as a translation candidate.

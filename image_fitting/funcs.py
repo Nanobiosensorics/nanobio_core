@@ -3,7 +3,6 @@ import matplotlib
 import numpy as np
 from matplotlib.patches import Polygon
 
-
 def centroid(x,y):
     length = x.shape[0]
     sum_x = np.sum(x)

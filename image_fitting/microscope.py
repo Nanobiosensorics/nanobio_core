@@ -14,22 +14,18 @@ from ..alignment.stochastic import find_translation_stochastic
 from ..alignment.utils import calculate_microscope_cell_centroids
 from ..epic_cardio.defs import WELL_NAMES
 
-
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
 WellFileSelection = Dict[str, Dict[str, str]]
-
 
 def _emit_progress(progress_callback: Optional[Callable[[int, int, str], None]], processed: int, total: int, status: str) -> None:
     if progress_callback is None:
         return
     progress_callback(int(processed), int(total), str(status))
 
-
 def _log(msg: str, log_callback: Optional[Callable[[str], None]] = None) -> None:
     print(f"[microscope-import] {msg}", flush=True)
     if log_callback is not None:
         log_callback(msg)
-
 
 def _read_cv2_any_path(
     path: Path,
@@ -54,7 +50,6 @@ def _read_cv2_any_path(
         _log(f"{label} fallback decode returned None: {path}", log_callback)
     return image
 
-
 @dataclass
 class MicroscopeImportData:
     image: np.ndarray
@@ -64,7 +59,6 @@ class MicroscopeImportData:
     image_path: str
     mask_path: str
 
-
 @dataclass
 class MicroscopeAlignmentResult:
     method: str
@@ -72,7 +66,6 @@ class MicroscopeAlignmentResult:
     scale: int
     projected_centroids: np.ndarray
     projected_seg_indices: np.ndarray
-
 
 @dataclass(frozen=True)
 class MicroscopeModel:
@@ -87,7 +80,6 @@ class MicroscopeModel:
     def apply_distortion(self, coords: np.ndarray) -> np.ndarray:
         return np.asarray(coords, dtype=np.float32)
 
-
 def _load_image(path: Path, log_callback: Optional[Callable[[str], None]] = None) -> Optional[np.ndarray]:
     _log(f"loading image: {path}", log_callback)
     t0 = time.perf_counter()
@@ -99,7 +91,6 @@ def _load_image(path: Path, log_callback: Optional[Callable[[str], None]] = None
     if image.ndim == 3 and image.shape[2] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
     return image
-
 
 def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None) -> Optional[np.ndarray]:
     _log(f"loading mask: {path}", log_callback)
@@ -146,14 +137,12 @@ def _load_mask(path: Path, log_callback: Optional[Callable[[str], None]] = None)
     mask[mask < 0] = 0
     return mask
 
-
 def discover_image_file(base: Path, well: str) -> Optional[Path]:
     for ext in IMAGE_EXTENSIONS:
         candidate = base / f"{well}{ext}"
         if candidate.exists():
             return candidate
     return None
-
 
 def discover_mask_file(base: Path, well: str) -> Optional[Path]:
     npz_path = base / f"{well}.npz"
@@ -167,7 +156,6 @@ def discover_mask_file(base: Path, well: str) -> Optional[Path]:
         if candidate.exists():
             return candidate
     return None
-
 
 def _load_well_files(
     well: str,
@@ -233,7 +221,6 @@ def _load_well_files(
     )
     _log(f"{well}: loaded {len(centroids)} centroids in {time.perf_counter() - t_well:.3f}s", log_callback)
     return True
-
 
 def import_microscope_dataset(
     folder: str,
@@ -328,19 +315,16 @@ def import_microscope_dataset(
     )
     return loaded, errors
 
-
 def epic_points_to_scaled(epic_points: np.ndarray, scale: int) -> np.ndarray:
     if epic_points.size == 0:
         return np.empty((0, 2), dtype=np.float32)
     return (((epic_points.astype(np.float32) + 0.5) / 80.0) * float(scale)).astype(np.float32)
-
 
 def project_mic_centroids_to_epic(centroids: np.ndarray, translation: np.ndarray, scale: int) -> np.ndarray:
     if centroids.size == 0:
         return np.empty((0, 2), dtype=np.float32)
     projected = ((centroids.astype(np.float32) - translation.astype(np.float32)) / float(scale)) * 80.0 - 0.5
     return projected.astype(np.float32)
-
 
 def project_mask_to_epic(mask: np.ndarray, translation: np.ndarray, scale: int, out_shape: Tuple[int, int] = (80, 80)) -> np.ndarray:
     sx = float(out_shape[1]) / float(scale)
@@ -357,7 +341,6 @@ def project_mask_to_epic(mask: np.ndarray, translation: np.ndarray, scale: int, 
         borderValue=0,
     )
     return projected.astype(np.int32, copy=False)
-
 
 def project_mask_pixel_sets(mask: np.ndarray, translation: np.ndarray, scale: int,
                             out_shape: Tuple[int, int] = (80, 80)) -> dict[int, np.ndarray]:
@@ -389,7 +372,6 @@ def project_mask_pixel_sets(mask: np.ndarray, translation: np.ndarray, scale: in
                 if label_id > 0:
                     coverage.setdefault(int(label_id), []).append((x, y))
     return {label_id: np.asarray(coords, dtype=np.int32) for label_id, coords in coverage.items()}
-
 
 def project_mask_pixel_participation(mask: np.ndarray, translation: np.ndarray, scale: int,
                                      out_shape: Tuple[int, int] = (80, 80)) -> dict[int, np.ndarray]:
@@ -439,7 +421,6 @@ def project_mask_pixel_participation(mask: np.ndarray, translation: np.ndarray, 
         for label_id, rows in participation.items()
     }
 
-
 def run_auto_translation(
     method: str,
     epic_points: np.ndarray,
@@ -477,7 +458,6 @@ def run_auto_translation(
 
     return np.rint(translation).astype(np.int32)
 
-
 def register_alignment(
     method: str,
     epic_points: np.ndarray,
@@ -511,7 +491,6 @@ def register_alignment(
         projected_centroids=projected.astype(np.float32, copy=False),
         projected_seg_indices=seg_indices,
     )
-
 
 def alignment_to_metadata(result: MicroscopeAlignmentResult) -> Dict[str, object]:
     return {
