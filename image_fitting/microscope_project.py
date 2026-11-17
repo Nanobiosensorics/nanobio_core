@@ -1,4 +1,4 @@
-"""Read microscope projects v1–v5 without rewriting source data."""
+"""Read channel-keyed microscope projects without rewriting source data."""
 
 import copy
 import hashlib
@@ -17,8 +17,6 @@ def read_microscope_project(path, *, payload=None):
             raise ValueError(f"Could not parse microscope project: {path}") from exc
     if not isinstance(payload, dict) or payload.get("kind") != "nanobio-microscope-segmentation-project":
         raise ValueError("File is not a Nanobio Microscope Segmentation batch project")
-    if payload.get("version") not in range(1, 6):
-        raise ValueError(f"Unsupported microscope batch project version: {payload.get('version')}")
     rows = payload.get("samples")
     if not isinstance(rows, list) or not rows:
         raise ValueError("Microscope batch project must contain at least one sample")
@@ -49,20 +47,14 @@ def read_microscope_project(path, *, payload=None):
                     raise ValueError(f"{sid}: mask {key} has no mask_path")
                 entry["mask_path"] = str((results / entry["mask_path"]).resolve())
                 records[f"{kind}:{key}"] = entry
-        if not records and row.get("mask_path"):
-            settings = payload.get("segmentation_settings", {})
-            selected = settings.get("cellpose", {}).get("selected_channel_ids") or []
-            primary = (selected[0] if settings.get("segmentation_mode") == "Cellpose" and selected else
-                       settings.get("thresholding", {}).get("channel_id"))
-            primary = primary or next((c["channel_id"] for c in channels if c["path"] == row["image_path"]), "c1")
-            records[f"segmentation:{primary}"] = dict(mask_path=str((results / row["mask_path"]).resolve()))
         reference = row.get("active_mask_reference")
-        active = f"{reference.get('kind')}:{reference.get('id')}" if reference else None
-        active = active or (f"segmentation:{row['active_segmentation_channel_id']}" if row.get("active_segmentation_channel_id") else None)
-        if active and active not in records:
+        if not isinstance(reference, dict) or not {'kind', 'id'} <= reference.keys():
+            raise ValueError(f'{sid}: explicit active_mask_reference is required')
+        active = f"{reference['kind']}:{reference['id']}"
+        if active not in records:
             raise ValueError(f"{sid}: unknown active mask {active}")
         row["mask_records"] = records
-        row["active_mask"] = active or next(iter(records), None)
+        row["active_mask"] = active
         samples.append(row)
     return payload, samples
 

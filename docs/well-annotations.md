@@ -1,6 +1,6 @@
 # Well annotations
 
-`annotations.py` provides a dependency-free version 1 parser for explicit well treatments:
+`annotations.py` provides a dependency-free parser for explicit well treatments:
 `Noncoated, HeLa -> SAL1(1.5 uM)` or `Gelatin, Preo -> HeLa-EV -> -`.
 Arrows separate phases; plus joins simultaneous additions; a lone minus records no change.
 Earlier materials remain unless an explicit `Wash(DMEM)` or `Replace(DMEM)` occurs.
@@ -16,3 +16,6 @@ and strictly increase. They map to recorded phase indices; no acquisition times 
 The evaluator may retain legacy manual labels separately. Structured-only consumers must
 require this payload instead of parsing legacy labels. Add new materials explicitly to the
 shared vocabulary with tests before accepting them in a production plate map.
+
+Payloads contain well annotations and source metadata without schema version fields. Reload
+validation reparses notation and checks coating, actions and phase bindings directly.

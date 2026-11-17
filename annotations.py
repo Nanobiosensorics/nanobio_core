@@ -1,4 +1,4 @@
-"""Versioned, dependency-free well treatment annotations.
+"""Dependency-free well treatment annotations.
 
 Notation describes interventions at phase boundaries, never measured times or outcomes.
 The parser accepts only explicit syntax and never interprets legacy free-text labels.
@@ -8,7 +8,6 @@ import math
 import re
 from copy import deepcopy
 
-SCHEMA_VERSION = 1
 COATINGS = {'noncoated': 'noncoated', 'rgd': 'ppr', 'ppr': 'ppr',
             'gelatin': 'gelatin', 'fibronectin': 'fibronectin', 'unknown': None}
 CELLS = {'hela': 'hela', 'preo': 'preo', 'mc3t3-e1': 'preo', 'nk92': 'nk92'}
@@ -137,7 +136,7 @@ def parse_annotation(notation):
         if index == 0 and any(a['kind'] in {'no_change', 'wash', 'replace'} for a in actions):
             raise ValueError('Initial phase must establish materials')
         phases.append(dict(index=index, label=label, actions=actions))
-    return dict(schema_version=SCHEMA_VERSION, notation=text, coating=coating, phases=phases)
+    return dict(notation=text, coating=coating, phases=phases)
 
 def build_plate_annotations(assignments, *, phase_binding=None, source=None, valid_wells=None):
     """Validate a complete import before returning an atomic session payload.
@@ -162,12 +161,10 @@ def build_plate_annotations(assignments, *, phase_binding=None, source=None, val
         wells[well] = dict(parsed, phase_binding=deepcopy(binding))
     if not wells:
         raise ValueError('Plate annotations cannot be empty')
-    return dict(schema_version=SCHEMA_VERSION, wells=wells, source=deepcopy(source))
+    return dict(wells=wells, source=deepcopy(source))
 
 def validate_plate_annotations(payload, *, valid_wells=None):
     """Reparse stored text and reject stale/tampered structured fields on reload."""
-    if not isinstance(payload, dict) or payload.get('schema_version') != SCHEMA_VERSION:
-        raise ValueError('Unsupported plate annotation schema version')
     try:
         assignments = {well: item['notation'] for well, item in payload['wells'].items()}
         bindings = {well: item.get('phase_binding') for well, item in payload['wells'].items()}
@@ -175,6 +172,7 @@ def validate_plate_annotations(payload, *, valid_wells=None):
         raise ValueError('Invalid stored plate annotations') from error
     normalized = build_plate_annotations(assignments, phase_binding=bindings,
                                          source=payload.get('source'), valid_wells=valid_wells)
-    if payload != normalized:
-        raise ValueError('Structured plate annotation fields disagree with their notation')
+    for well, item in normalized['wells'].items():
+        if any(payload['wells'][well].get(key) != value for key, value in item.items()):
+            raise ValueError('Structured plate annotation fields disagree with their notation')
     return normalized

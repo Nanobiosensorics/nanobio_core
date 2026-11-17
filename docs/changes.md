@@ -1,5 +1,9 @@
 # Changes
 
+## 2026-11-17
+
+- Removed annotation schema numbers and microscope-project version gates. Validate annotation content directly; microscope projects require channel-keyed masks and explicit active-mask references instead of scalar-mask adapters.
+
 ## 2026-10-14
 
 - Added per-well active-area masks for localization, complete microscope footprints and region growth. Invalid/out-of-frame coordinates are rejected without clipping.
